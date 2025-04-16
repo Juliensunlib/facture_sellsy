@@ -28,14 +28,26 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         
+    - name: Verify environment variables
+      run: |
+        echo "Vérification des variables d'environnement..."
+        if [ -z "${{ secrets.SELLSY_CLIENT_ID }}" ]; then echo "SELLSY_CLIENT_ID manquant"; fi
+        if [ -z "${{ secrets.SELLSY_CLIENT_SECRET }}" ]; then echo "SELLSY_CLIENT_SECRET manquant"; fi
+        if [ -z "${{ secrets.AIRTABLE_API_KEY }}" ]; then echo "AIRTABLE_API_KEY manquant"; fi
+        if [ -z "${{ secrets.AIRTABLE_BASE_ID }}" ]; then echo "AIRTABLE_BASE_ID manquant"; fi
+        if [ -z "${{ secrets.AIRTABLE_TABLE_NAME }}" ]; then echo "AIRTABLE_TABLE_NAME manquant"; fi
+        
     - name: Sync missing invoices
       env:
         SELLSY_CLIENT_ID: ${{ secrets.SELLSY_CLIENT_ID }}
         SELLSY_CLIENT_SECRET: ${{ secrets.SELLSY_CLIENT_SECRET }}
+        SELLSY_API_URL: ${{ secrets.SELLSY_API_URL || 'https://api.sellsy.fr' }}
         AIRTABLE_API_KEY: ${{ secrets.AIRTABLE_API_KEY }}
         AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
         AIRTABLE_TABLE_NAME: ${{ secrets.AIRTABLE_TABLE_NAME }}
       run: |
+        echo "Variables d'environnement configurées."
+        echo "Début de la synchronisation des factures manquantes..."
         python main.py sync-missing --limit ${{ github.event.inputs.limit }}
         
     - name: Log completion
