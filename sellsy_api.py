@@ -22,20 +22,25 @@ class SellsyAPI:
             return self.access_token
         
         # Si non, demander un nouveau token
-        url = "https://login.sellsy.com/oauth2/access-tokens"  # URL corrigée pour l'API v2
+        url = "https://login.sellsy.com/oauth2/access-tokens"
+        
+        # Authentification en utilisant l'autorisation basique (Basic Auth)
+        auth = (SELLSY_CLIENT_ID, SELLSY_CLIENT_SECRET)
+        
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
-            "Accept": "application/json"  # Ajout d'un en-tête pour forcer la réponse en JSON
+            "Accept": "application/json"
         }
+        
+        # Corps de la requête avec seulement grant_type
         data = {
-            "grant_type": "client_credentials",
-            "client_id": SELLSY_CLIENT_ID,
-            "client_secret": SELLSY_CLIENT_SECRET
+            "grant_type": "client_credentials"
         }
         
         print(f"Tentative d'authentification à l'API Sellsy: {url}")
         try:
-            response = requests.post(url, headers=headers, data=data)
+            # Utiliser l'authentification Basic avec auth=(client_id, client_secret)
+            response = requests.post(url, auth=auth, headers=headers, data=data)
             print(f"Statut de la réponse: {response.status_code}")
             
             # Afficher les en-têtes de la réponse pour le débogage
