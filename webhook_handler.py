@@ -43,9 +43,20 @@ async def handle_webhook(payload: dict = Depends(verify_webhook)):
             invoice_details = sellsy.get_invoice_details(resource_id)
             
             if invoice_details:
-                # Formater et enregistrer dans Airtable
+                # Formater la facture pour Airtable
                 formatted_invoice = airtable.format_invoice_for_airtable(invoice_details)
-                airtable.insert_or_update_invoice(formatted_invoice)
-                return {"status": "success", "message": f"Facture {resource_id} traitée"}
+                
+                # Vérification si la facture existe déjà dans Airtable
+                existing_record = airtable.find_invoice_by_id(formatted_invoice["ID_Facture"])
+                
+                if existing_record:
+                    # Mise à jour de la facture existante
+                    record_id = existing_record["id"]
+                    airtable.update_invoice(record_id, formatted_invoice)
+                    return {"status": "success", "message": f"Facture {resource_id} mise à jour dans Airtable"}
+                else:
+                    # Si la facture n'existe pas, insertion dans Airtable
+                    airtable.insert_invoice(formatted_invoice)
+                    return {"status": "success", "message": f"Facture {resource_id} ajoutée à Airtable"}
     
     return {"status": "ignored", "message": "Événement non traité"}
