@@ -168,7 +168,7 @@ class SellsyAPI:
             "Accept": "application/json"
         }
         
-        url = f"{self.api_url}/documents/invoices/{invoice_id}"
+        url = f"{self.api_url}/invoices/{invoice_id}"
         
         try:
             response = requests.get(url, headers=headers)
