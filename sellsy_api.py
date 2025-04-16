@@ -84,7 +84,7 @@ class SellsyAPI:
             "created_after": f"{start_date}T00:00:00Z"
         }
         
-        url = f"{self.api_url}/documents/invoices"
+        url = f"{self.api_url}/invoices/getAll"
         print(f"Recherche des factures depuis {start_date}: {url}")
         
         try:
