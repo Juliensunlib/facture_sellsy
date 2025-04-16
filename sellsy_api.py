@@ -23,7 +23,10 @@ class SellsyAPI:
         
         # Si non, demander un nouveau token
         url = f"{self.api_url}/oauth2/token"
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json"  # Ajout d'un en-tête pour forcer la réponse en JSON
+        }
         data = {
             "grant_type": "client_credentials",
             "client_id": SELLSY_CLIENT_ID,
@@ -35,11 +38,14 @@ class SellsyAPI:
             response = requests.post(url, headers=headers, data=data)
             print(f"Statut de la réponse: {response.status_code}")
             
-            # Afficher les 100 premiers caractères de la réponse (pour le debugging)
-            response_preview = response.text[:100] + "..." if len(response.text) > 100 else response.text
-            print(f"Aperçu de la réponse: {response_preview}")
+            # Afficher les en-têtes de la réponse pour le débogage
+            print(f"En-têtes de la réponse: {response.headers.get('Content-Type')}")
             
-            if response.status_code == 200:
+            # Vérifier si la réponse est du JSON valide
+            content_type = response.headers.get('Content-Type', '')
+            is_json = 'application/json' in content_type
+            
+            if response.status_code == 200 and is_json:
                 try:
                     token_data = response.json()
                     self.access_token = token_data["access_token"]
@@ -48,11 +54,11 @@ class SellsyAPI:
                     return self.access_token
                 except json.JSONDecodeError as e:
                     print(f"Erreur de décodage JSON: {e}")
-                    print(f"Contenu de la réponse: {response.text}")
+                    print(f"Contenu de la réponse (100 premiers caractères): {response.text[:100]}")
                     raise Exception("Réponse de l'API Sellsy invalide")
             else:
                 print(f"Erreur d'authentification Sellsy: Code {response.status_code}")
-                print(f"Réponse: {response.text}")
+                print(f"Réponse (100 premiers caractères): {response.text[:100]}")
                 raise Exception(f"Échec de l'authentification Sellsy (code {response.status_code})")
         except requests.exceptions.RequestException as e:
             print(f"Erreur de connexion à l'API Sellsy: {e}")
@@ -63,24 +69,25 @@ class SellsyAPI:
         token = self.get_access_token()
         headers = {
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Accept": "application/json"
         }
         
         # Calculer la date de début (il y a X jours)
         start_date = time.strftime("%Y-%m-%d", time.localtime(time.time() - days * 86400))
         
-        # Paramètres de recherche pour les factures
+        # Paramètres de recherche pour les factures - adaptés à l'API v2
         search_params = {
             "pagination": {
-                "pageSize": 100,
-                "page": 1
+                "nbPerPage": 100,
+                "pagenum": 1
             },
-            "filters": {
+            "search": {
                 "createdAfter": f"{start_date}T00:00:00Z"
             }
         }
         
-        url = f"{self.api_url}/v1/invoices"
+        url = f"{self.api_url}/invoices/search"
         print(f"Recherche des factures depuis {start_date}: {url}")
         
         try:
@@ -90,9 +97,9 @@ class SellsyAPI:
             if response.status_code == 200:
                 data = response.json()
                 print(f"Nombre de factures trouvées: {len(data.get('data', []))}")
-                return data["data"]
+                return data.get("data", [])
             else:
-                print(f"Erreur lors de la récupération des factures: {response.text}")
+                print(f"Erreur lors de la récupération des factures: {response.text[:100]}")
                 return []
         except Exception as e:
             print(f"Exception lors de la récupération des factures: {e}")
@@ -103,26 +110,27 @@ class SellsyAPI:
         token = self.get_access_token()
         headers = {
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Accept": "application/json"
         }
         
-        # Paramètres de recherche pour les factures
+        # Paramètres de recherche pour les factures - adaptés à l'API v2
         search_params = {
             "pagination": {
-                "pageSize": 100,
-                "page": 1
+                "nbPerPage": 100,
+                "pagenum": 1
             }
         }
         
         all_invoices = []
         current_page = 1
-        total_pages = 1
+        has_more = True
         
         print(f"Récupération de toutes les factures (limite: {limit})...")
         
-        while current_page <= total_pages and len(all_invoices) < limit:
-            search_params["pagination"]["page"] = current_page
-            url = f"{self.api_url}/v1/invoices"
+        while has_more and len(all_invoices) < limit:
+            search_params["pagination"]["pagenum"] = current_page
+            url = f"{self.api_url}/invoices/search"
             
             print(f"Récupération de la page {current_page}: {url}")
             
@@ -140,14 +148,14 @@ class SellsyAPI:
                         # Mettre à jour les informations de pagination
                         pagination = response_data.get("pagination", {})
                         current_page += 1
-                        total_pages = pagination.get("nbPages", 0)
-                        print(f"Total des pages: {total_pages}")
+                        has_more = pagination.get("pagenum", 0) < pagination.get("nbPages", 0)
+                        print(f"Plus de pages disponibles: {has_more}")
                     except json.JSONDecodeError as e:
                         print(f"Erreur de décodage JSON: {e}")
                         print(f"Aperçu de la réponse: {response.text[:200]}...")
                         break
                 else:
-                    print(f"Erreur lors de la récupération des factures (page {current_page}): {response.text}")
+                    print(f"Erreur lors de la récupération des factures (page {current_page}): {response.text[:200]}")
                     break
             except Exception as e:
                 print(f"Exception lors de la récupération de la page {current_page}: {e}")
@@ -161,18 +169,18 @@ class SellsyAPI:
         token = self.get_access_token()
         headers = {
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
+            "Accept": "application/json"
         }
         
-        url = f"{self.api_url}/v1/invoices/{invoice_id}"
+        url = f"{self.api_url}/invoices/{invoice_id}"
         
         try:
             response = requests.get(url, headers=headers)
             
             if response.status_code == 200:
-                return response.json()["data"]
+                return response.json().get("data", {})
             else:
-                print(f"Erreur lors de la récupération des détails de la facture {invoice_id}: {response.text}")
+                print(f"Erreur lors de la récupération des détails de la facture {invoice_id}: {response.text[:200]}")
                 return None
         except Exception as e:
             print(f"Exception lors de la récupération des détails de la facture {invoice_id}: {e}")
