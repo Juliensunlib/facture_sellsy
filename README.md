@@ -5,6 +5,7 @@ Ce projet permet de synchroniser automatiquement les factures depuis Sellsy vers
 ## Fonctionnalités
 
 - Synchronisation manuelle des factures Sellsy vers Airtable
+- Synchronisation des factures manquantes dans Airtable
 - Synchronisation automatique via webhook lors de la création ou modification d'une facture
 - Compatible avec la nouvelle API Sellsy v2
 
@@ -52,6 +53,18 @@ python main.py sync
 Pour définir une autre période:
 ```
 python main.py sync --days 60
+```
+
+### Synchronisation des factures manquantes
+
+Pour ajouter toutes les factures qui ne sont pas encore dans Airtable:
+```
+python main.py sync-missing
+```
+
+Pour limiter le nombre de factures à vérifier:
+```
+python main.py sync-missing --limit 500
 ```
 
 ### Démarrer le serveur webhook
