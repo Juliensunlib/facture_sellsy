@@ -34,6 +34,7 @@ async def handle_webhook(payload: dict = Depends(verify_webhook)):
     """Gère les webhooks entrants de Sellsy"""
     event_type = payload.get("eventType")
     
+    # Adaptation pour l'API v2 de Sellsy si nécessaire
     if event_type in ["invoice.created", "invoice.updated"]:
         invoice_id = payload.get("data", {}).get("id")
         
