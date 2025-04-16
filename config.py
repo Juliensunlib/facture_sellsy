@@ -7,7 +7,7 @@ load_dotenv()
 # Configuration Sellsy
 SELLSY_CLIENT_ID = os.getenv("SELLSY_CLIENT_ID")
 SELLSY_CLIENT_SECRET = os.getenv("SELLSY_CLIENT_SECRET")
-SELLSY_API_URL = os.getenv("SELLSY_API_URL", "https://api.sellsy.com/v2")  # Mise à jour vers l'API v2
+SELLSY_API_URL = os.getenv("SELLSY_API_URL", "https://api.sellsy.com/v2")
 
 # Configuration Airtable
 AIRTABLE_API_KEY = os.getenv("AIRTABLE_API_KEY")
