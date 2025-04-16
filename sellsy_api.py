@@ -22,7 +22,7 @@ class SellsyAPI:
             return self.access_token
         
         # Si non, demander un nouveau token
-        url = f"{self.api_url}/oauth2/token"
+        url = "https://login.sellsy.com/oauth2/access-tokens"  # URL corrigée pour l'API v2
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
             "Accept": "application/json"  # Ajout d'un en-tête pour forcer la réponse en JSON
