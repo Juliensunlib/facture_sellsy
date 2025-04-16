@@ -23,8 +23,8 @@ class SellsyAPI:
             return self.access_token
         
         # Si non, demander un nouveau token
-        # URL correcte pour l'API v2 de Sellsy
-        url = "https://api.sellsy.com/oauth2/access-tokens"
+        # URL correcte pour l'API v2 de Sellsy selon la documentation
+        url = "https://login.sellsy.com/oauth2/access-tokens"
         
         # En-têtes conformes à la documentation v2
         headers = {
@@ -82,7 +82,6 @@ class SellsyAPI:
         start_date = time.strftime("%Y-%m-%d", time.localtime(time.time() - days * 86400))
         
         # Paramètres de recherche pour les factures - adaptés à l'API v2
-        # Dans la v2, les filtres et la pagination sont passés directement comme paramètres
         params = {
             "page": 1,
             "limit": 100,
