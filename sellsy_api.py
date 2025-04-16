@@ -23,34 +23,30 @@ class SellsyAPI:
             return self.access_token
         
         # Si non, demander un nouveau token
-        # URL correcte pour l'API v2 de Sellsy selon la documentation
         url = "https://login.sellsy.com/oauth2/access-tokens"
         
-        # En-têtes conformes à la documentation v2
+        # Authentification avec les identifiants client en Base64
+        auth_string = f"{SELLSY_CLIENT_ID}:{SELLSY_CLIENT_SECRET}"
+        auth_bytes = auth_string.encode('ascii')
+        auth_b64 = base64.b64encode(auth_bytes).decode('ascii')
+        
         headers = {
+            "Authorization": f"Basic {auth_b64}",
             "Content-Type": "application/x-www-form-urlencoded",
-            "Accept": "application/json",
-            "Authorization": f"Basic {base64.b64encode(f'{SELLSY_CLIENT_ID}:{SELLSY_CLIENT_SECRET}'.encode()).decode()}"
+            "Accept": "application/json"
         }
         
-        # Corps de la requête pour l'authentification client_credentials
-        data = {
-            "grant_type": "client_credentials"
-        }
+        data = "grant_type=client_credentials"
         
         print(f"Tentative d'authentification à l'API Sellsy: {url}")
+        print(f"En-têtes d'authentification envoyés: {headers}")
+        
         try:
             response = requests.post(url, headers=headers, data=data)
             print(f"Statut de la réponse: {response.status_code}")
-            
-            # Afficher les en-têtes de la réponse pour le débogage
             print(f"En-têtes de la réponse: {response.headers.get('Content-Type')}")
             
-            # Vérifier si la réponse est du JSON valide
-            content_type = response.headers.get('Content-Type', '')
-            is_json = 'application/json' in content_type
-            
-            if response.status_code == 200 and is_json:
+            if response.status_code == 200:
                 try:
                     token_data = response.json()
                     self.access_token = token_data["access_token"]
@@ -63,7 +59,7 @@ class SellsyAPI:
                     raise Exception("Réponse de l'API Sellsy invalide")
             else:
                 print(f"Erreur d'authentification Sellsy: Code {response.status_code}")
-                print(f"Réponse (100 premiers caractères): {response.text[:100]}")
+                print(f"Réponse complète: {response.text}")
                 raise Exception(f"Échec de l'authentification Sellsy (code {response.status_code})")
         except requests.exceptions.RequestException as e:
             print(f"Erreur de connexion à l'API Sellsy: {e}")
@@ -100,7 +96,7 @@ class SellsyAPI:
                 print(f"Nombre de factures trouvées: {len(data.get('data', []))}")
                 return data.get("data", [])
             else:
-                print(f"Erreur lors de la récupération des factures: {response.text[:100]}")
+                print(f"Erreur lors de la récupération des factures: {response.text}")
                 return []
         except Exception as e:
             print(f"Exception lors de la récupération des factures: {e}")
@@ -155,7 +151,7 @@ class SellsyAPI:
                         print(f"Aperçu de la réponse: {response.text[:200]}...")
                         break
                 else:
-                    print(f"Erreur lors de la récupération des factures (page {current_page}): {response.text[:200]}")
+                    print(f"Erreur lors de la récupération des factures (page {current_page}): {response.text}")
                     break
             except Exception as e:
                 print(f"Exception lors de la récupération de la page {current_page}: {e}")
@@ -180,7 +176,7 @@ class SellsyAPI:
             if response.status_code == 200:
                 return response.json().get("data", {})
             else:
-                print(f"Erreur lors de la récupération des détails de la facture {invoice_id}: {response.text[:200]}")
+                print(f"Erreur lors de la récupération des détails de la facture {invoice_id}: {response.text}")
                 return None
         except Exception as e:
             print(f"Exception lors de la récupération des détails de la facture {invoice_id}: {e}")
