@@ -10,9 +10,9 @@ app = FastAPI()
 sellsy = SellsyAPI()
 airtable = AirtableAPI()
 
-async def verify_webhook(request: Request, x_sellsy_webhook_signature: str = Header(None)):
-    """Vérifie la signature du webhook Sellsy"""
-    if not x_sellsy_webhook_signature:
+async def verify_webhook(request: Request, x_sellsy_signature: str = Header(None)):
+    """Vérifie la signature du webhook Sellsy (v2)"""
+    if not x_sellsy_signature:
         raise HTTPException(status_code=401, detail="Signature manquante")
     
     body = await request.body()
@@ -24,7 +24,7 @@ async def verify_webhook(request: Request, x_sellsy_webhook_signature: str = Hea
         hashlib.sha256
     ).hexdigest()
     
-    if not hmac.compare_digest(signature, x_sellsy_webhook_signature):
+    if not hmac.compare_digest(signature, x_sellsy_signature):
         raise HTTPException(status_code=401, detail="Signature invalide")
     
     return json.loads(body)
@@ -32,20 +32,20 @@ async def verify_webhook(request: Request, x_sellsy_webhook_signature: str = Hea
 @app.post("/webhook/sellsy")
 async def handle_webhook(payload: dict = Depends(verify_webhook)):
     """Gère les webhooks entrants de Sellsy"""
-    event_type = payload.get("eventType")
+    event_type = payload.get("event_type")
     
-    # Adaptation pour l'API v2 de Sellsy si nécessaire
+    # Adaptation pour l'API v2 de Sellsy
     if event_type in ["invoice.created", "invoice.updated"]:
-        invoice_id = payload.get("data", {}).get("id")
+        resource_id = payload.get("resource_id")
         
-        if invoice_id:
+        if resource_id:
             # Récupérer les détails complets de la facture
-            invoice_details = sellsy.get_invoice_details(invoice_id)
+            invoice_details = sellsy.get_invoice_details(resource_id)
             
             if invoice_details:
                 # Formater et enregistrer dans Airtable
                 formatted_invoice = airtable.format_invoice_for_airtable(invoice_details)
                 airtable.insert_or_update_invoice(formatted_invoice)
-                return {"status": "success", "message": f"Facture {invoice_id} traitée"}
+                return {"status": "success", "message": f"Facture {resource_id} traitée"}
     
     return {"status": "ignored", "message": "Événement non traité"}
