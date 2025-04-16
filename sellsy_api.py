@@ -124,7 +124,7 @@ class SellsyAPI:
                 "limit": page_size
             }
             
-            url = f"{self.api_url}/documents/invoices"
+            url = f"{self.api_url}/invoices"
             
             print(f"Récupération de la page {current_page}: {url}")
             
