@@ -23,7 +23,8 @@ class SellsyAPI:
             return self.access_token
         
         # Si non, demander un nouveau token
-        url = "https://api.sellsy.com/v2/authorizations/access-tokens"
+        # URL correcte pour l'API v2 de Sellsy
+        url = "https://api.sellsy.com/oauth2/access-tokens"
         
         # En-têtes conformes à la documentation v2
         headers = {
@@ -81,22 +82,18 @@ class SellsyAPI:
         start_date = time.strftime("%Y-%m-%d", time.localtime(time.time() - days * 86400))
         
         # Paramètres de recherche pour les factures - adaptés à l'API v2
-        search_params = {
-            "pagination": {
-                "page": 1,
-                "limit": 100
-            },
-            "filters": {
-                "created_after": f"{start_date}T00:00:00Z"
-            }
+        # Dans la v2, les filtres et la pagination sont passés directement comme paramètres
+        params = {
+            "page": 1,
+            "limit": 100,
+            "created_after": f"{start_date}T00:00:00Z"
         }
         
-        url = f"{self.api_url}/invoices"
+        url = f"{self.api_url}/documents/invoices"
         print(f"Recherche des factures depuis {start_date}: {url}")
         
         try:
-            response = requests.get(url, headers=headers, params={"filters": json.dumps(search_params["filters"]), 
-                                                                 "pagination": json.dumps(search_params["pagination"])})
+            response = requests.get(url, headers=headers, params=params)
             print(f"Statut de la réponse: {response.status_code}")
             
             if response.status_code == 200:
@@ -119,26 +116,25 @@ class SellsyAPI:
             "Accept": "application/json"
         }
         
-        # Paramètres de recherche pour les factures - adaptés à l'API v2
-        pagination = {
-            "page": 1,
-            "limit": 100 if limit > 100 else limit
-        }
-        
         all_invoices = []
         current_page = 1
         has_more = True
+        page_size = 100 if limit > 100 else limit
         
         print(f"Récupération de toutes les factures (limite: {limit})...")
         
         while has_more and len(all_invoices) < limit:
-            pagination["page"] = current_page
-            url = f"{self.api_url}/invoices"
+            params = {
+                "page": current_page,
+                "limit": page_size
+            }
+            
+            url = f"{self.api_url}/documents/invoices"
             
             print(f"Récupération de la page {current_page}: {url}")
             
             try:
-                response = requests.get(url, headers=headers, params={"pagination": json.dumps(pagination)})
+                response = requests.get(url, headers=headers, params=params)
                 print(f"Statut de la réponse: {response.status_code}")
                 
                 if response.status_code == 200:
@@ -151,8 +147,9 @@ class SellsyAPI:
                         # Vérifier s'il y a d'autres pages
                         meta = response_data.get("meta", {})
                         pagination_info = meta.get("pagination", {})
+                        total_pages = pagination_info.get("nbPages", 0)
                         current_page += 1
-                        has_more = current_page <= pagination_info.get("pages_count", 0)
+                        has_more = current_page <= total_pages and len(page_invoices) > 0
                         print(f"Plus de pages disponibles: {has_more}")
                     except json.JSONDecodeError as e:
                         print(f"Erreur de décodage JSON: {e}")
@@ -176,7 +173,7 @@ class SellsyAPI:
             "Accept": "application/json"
         }
         
-        url = f"{self.api_url}/invoices/{invoice_id}"
+        url = f"{self.api_url}/documents/invoices/{invoice_id}"
         
         try:
             response = requests.get(url, headers=headers)
