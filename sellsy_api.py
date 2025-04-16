@@ -67,6 +67,45 @@ class SellsyAPI:
             print(f"Erreur lors de la récupération des factures: {response.text}")
             return []
 
+    def get_all_invoices(self, limit=1000):
+        """Récupère toutes les factures (avec une limite)"""
+        token = self.get_access_token()
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        # Paramètres de recherche pour les factures
+        search_params = {
+            "pagination": {
+                "pageSize": 100,
+                "page": 1
+            }
+        }
+        
+        all_invoices = []
+        current_page = 1
+        total_pages = 1
+        
+        while current_page <= total_pages and len(all_invoices) < limit:
+            search_params["pagination"]["page"] = current_page
+            url = f"{self.api_url}/v1/invoices"
+            response = requests.post(url, headers=headers, json=search_params)
+            
+            if response.status_code == 200:
+                response_data = response.json()
+                all_invoices.extend(response_data["data"])
+                
+                # Mettre à jour les informations de pagination
+                pagination = response_data.get("pagination", {})
+                current_page += 1
+                total_pages = pagination.get("nbPages", 0)
+            else:
+                print(f"Erreur lors de la récupération des factures: {response.text}")
+                break
+        
+        return all_invoices[:limit]
+
     def get_invoice_details(self, invoice_id):
         """Récupère les détails d'une facture spécifique"""
         token = self.get_access_token()
