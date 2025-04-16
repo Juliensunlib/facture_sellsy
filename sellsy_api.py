@@ -1,6 +1,7 @@
 import requests
 import json
 import time
+import base64
 from config import SELLSY_CLIENT_ID, SELLSY_CLIENT_SECRET, SELLSY_API_URL
 
 class SellsyAPI:
@@ -14,7 +15,7 @@ class SellsyAPI:
             print("ERREUR: Identifiants Sellsy manquants dans les variables d'environnement")
 
     def get_access_token(self):
-        """Obtient ou renouvelle le token d'accès Sellsy"""
+        """Obtient ou renouvelle le token d'accès Sellsy selon la documentation v2"""
         current_time = time.time()
         
         # Vérifier si le token est encore valide
@@ -22,25 +23,23 @@ class SellsyAPI:
             return self.access_token
         
         # Si non, demander un nouveau token
-        url = "https://login.sellsy.com/oauth2/access-tokens"
+        url = "https://api.sellsy.com/v2/authorizations/access-tokens"
         
-        # Authentification en utilisant l'autorisation basique (Basic Auth)
-        auth = (SELLSY_CLIENT_ID, SELLSY_CLIENT_SECRET)
-        
+        # En-têtes conformes à la documentation v2
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
-            "Accept": "application/json"
+            "Accept": "application/json",
+            "Authorization": f"Basic {base64.b64encode(f'{SELLSY_CLIENT_ID}:{SELLSY_CLIENT_SECRET}'.encode()).decode()}"
         }
         
-        # Corps de la requête avec seulement grant_type
+        # Corps de la requête pour l'authentification client_credentials
         data = {
             "grant_type": "client_credentials"
         }
         
         print(f"Tentative d'authentification à l'API Sellsy: {url}")
         try:
-            # Utiliser l'authentification Basic avec auth=(client_id, client_secret)
-            response = requests.post(url, auth=auth, headers=headers, data=data)
+            response = requests.post(url, headers=headers, data=data)
             print(f"Statut de la réponse: {response.status_code}")
             
             # Afficher les en-têtes de la réponse pour le débogage
@@ -84,19 +83,20 @@ class SellsyAPI:
         # Paramètres de recherche pour les factures - adaptés à l'API v2
         search_params = {
             "pagination": {
-                "nbPerPage": 100,
-                "pagenum": 1
+                "page": 1,
+                "limit": 100
             },
-            "search": {
-                "createdAfter": f"{start_date}T00:00:00Z"
+            "filters": {
+                "created_after": f"{start_date}T00:00:00Z"
             }
         }
         
-        url = f"{self.api_url}/invoices/search"
+        url = f"{self.api_url}/invoices"
         print(f"Recherche des factures depuis {start_date}: {url}")
         
         try:
-            response = requests.post(url, headers=headers, json=search_params)
+            response = requests.get(url, headers=headers, params={"filters": json.dumps(search_params["filters"]), 
+                                                                 "pagination": json.dumps(search_params["pagination"])})
             print(f"Statut de la réponse: {response.status_code}")
             
             if response.status_code == 200:
@@ -120,11 +120,9 @@ class SellsyAPI:
         }
         
         # Paramètres de recherche pour les factures - adaptés à l'API v2
-        search_params = {
-            "pagination": {
-                "nbPerPage": 100,
-                "pagenum": 1
-            }
+        pagination = {
+            "page": 1,
+            "limit": 100 if limit > 100 else limit
         }
         
         all_invoices = []
@@ -134,13 +132,13 @@ class SellsyAPI:
         print(f"Récupération de toutes les factures (limite: {limit})...")
         
         while has_more and len(all_invoices) < limit:
-            search_params["pagination"]["pagenum"] = current_page
-            url = f"{self.api_url}/invoices/search"
+            pagination["page"] = current_page
+            url = f"{self.api_url}/invoices"
             
             print(f"Récupération de la page {current_page}: {url}")
             
             try:
-                response = requests.post(url, headers=headers, json=search_params)
+                response = requests.get(url, headers=headers, params={"pagination": json.dumps(pagination)})
                 print(f"Statut de la réponse: {response.status_code}")
                 
                 if response.status_code == 200:
@@ -150,10 +148,11 @@ class SellsyAPI:
                         all_invoices.extend(page_invoices)
                         print(f"Page {current_page}: {len(page_invoices)} factures récupérées")
                         
-                        # Mettre à jour les informations de pagination
-                        pagination = response_data.get("pagination", {})
+                        # Vérifier s'il y a d'autres pages
+                        meta = response_data.get("meta", {})
+                        pagination_info = meta.get("pagination", {})
                         current_page += 1
-                        has_more = pagination.get("pagenum", 0) < pagination.get("nbPages", 0)
+                        has_more = current_page <= pagination_info.get("pages_count", 0)
                         print(f"Plus de pages disponibles: {has_more}")
                     except json.JSONDecodeError as e:
                         print(f"Erreur de décodage JSON: {e}")
