@@ -3,7 +3,7 @@ from config import AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME
 
 class AirtableAPI:
     def __init__(self):
-        # Connexion à la table Airtable
+        """Initialisation de la connexion à Airtable"""
         self.table = Table(AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME)
 
     def format_invoice_for_airtable(self, invoice):
@@ -52,17 +52,19 @@ class AirtableAPI:
 # Code principal pour synchroniser les factures Sellsy avec Airtable
 def sync_invoices_to_airtable(sellsy_api_client):
     print("🚀 Début de la synchronisation des factures Sellsy vers Airtable...")
-    
+
+    # Récupère toutes les factures depuis Sellsy
     invoices = sellsy_api_client.get_all_invoices()
 
     if invoices:
         print(f"📦 {len(invoices)} factures récupérées depuis Sellsy.")
         airtable_api = AirtableAPI()
-        
+
+        # Parcours des factures récupérées et insertion ou mise à jour dans Airtable
         for invoice in invoices:
             formatted_invoice = airtable_api.format_invoice_for_airtable(invoice)
             airtable_api.insert_or_update_invoice(formatted_invoice)
-        
+
         print("✅ Synchronisation terminée.")
     else:
         print("⚠️ Aucune facture récupérée depuis Sellsy.")
