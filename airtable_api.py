@@ -5,66 +5,70 @@ class AirtableAPI:
     def __init__(self):
         # Connexion à la table Airtable
         self.table = Table(AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME)
-    
+
     def format_invoice_for_airtable(self, invoice):
-        """Convertit une facture Sellsy au format Airtable selon les champs de l'API v2"""
+        """Convertit une facture Sellsy au format Airtable"""
         return {
-            "ID_Facture": invoice.get("id"),  # ID de la facture dans Sellsy
-            "Numéro": invoice.get("reference"),  # Numéro de la facture
-            "Date": invoice.get("created_at"),  # Date de création
-            "Client": invoice.get("relation", {}).get("name", ""),  # Nom du client
-            "Montant_HT": invoice.get("total_amount_without_taxes"),  # Montant hors taxes
-            "Montant_TTC": invoice.get("total_amount_with_taxes"),  # Montant TTC
-            "Statut": invoice.get("status"),  # Statut de la facture
-            "URL": f"https://go.sellsy.com/document/{invoice.get('id')}"  # Lien vers la facture
+            "ID_Facture": str(invoice.get("id")),  # Conversion explicite en str
+            "Numéro": invoice.get("reference"),
+            "Date": invoice.get("created_at"),
+            "Client": invoice.get("relation", {}).get("name", ""),
+            "Montant_HT": invoice.get("total_amount_without_taxes"),
+            "Montant_TTC": invoice.get("total_amount_with_taxes"),
+            "Statut": invoice.get("status"),
+            "URL": f"https://go.sellsy.com/document/{invoice.get('id')}"
         }
-    
+
     def find_invoice_by_id(self, sellsy_id):
         """Recherche une facture dans Airtable par son ID Sellsy"""
-        records = self.table.all(formula=f"{{ID_Facture}}='{sellsy_id}'")
-        return records[0] if records else None
-    
+        sellsy_id = str(sellsy_id)  # Sécurité : conversion en chaîne
+        formula = f"{{ID_Facture}}='{sellsy_id}'"
+        print(f"🔍 Recherche dans Airtable avec formule : {formula}")
+        try:
+            records = self.table.all(formula=formula)
+            print(f"Résultat de recherche : {len(records)} enregistrement(s) trouvé(s).")
+            return records[0] if records else None
+        except Exception as e:
+            print(f"❌ Erreur lors de la recherche de la facture {sellsy_id} : {e}")
+            return None
+
     def insert_or_update_invoice(self, invoice_data):
         """Insère ou met à jour une facture dans Airtable"""
-        sellsy_id = invoice_data["ID_Facture"]
-        
-        # Recherche si la facture existe déjà dans Airtable
+        sellsy_id = str(invoice_data["ID_Facture"])
         existing_record = self.find_invoice_by_id(sellsy_id)
-        
+
         if existing_record:
-            # Mise à jour de la facture existante
             record_id = existing_record["id"]
+            print(f"🔁 Facture {sellsy_id} déjà présente, mise à jour en cours...")
             self.table.update(record_id, invoice_data)
-            print(f"Facture {sellsy_id} mise à jour dans Airtable")
+            print(f"✅ Facture {sellsy_id} mise à jour avec succès.")
             return record_id
         else:
-            # Si la facture n'existe pas, l'insérer
-            print(f"Facture {sellsy_id} n'existe pas dans Airtable, insertion...")
+            print(f"➕ Facture {sellsy_id} non trouvée, insertion en cours...")
             record = self.table.create(invoice_data)
-            print(f"Facture {sellsy_id} ajoutée à Airtable avec ID {record['id']}")
+            print(f"✅ Facture {sellsy_id} ajoutée avec succès à Airtable (ID: {record['id']}).")
             return record["id"]
 
-# Code principal pour récupérer les factures de Sellsy et les insérer dans Airtable
+# Code principal pour synchroniser les factures Sellsy avec Airtable
 def sync_invoices_to_airtable(sellsy_api_client):
-    print("Début de la synchronisation des factures manquantes...")
+    print("🚀 Début de la synchronisation des factures Sellsy vers Airtable...")
     
-    # Récupérer les factures depuis Sellsy (maximum 1000 factures par appel)
     invoices = sellsy_api_client.get_all_invoices()
-    
+
     if invoices:
-        print(f"{len(invoices)} factures récupérées depuis Sellsy.")
-        
+        print(f"📦 {len(invoices)} factures récupérées depuis Sellsy.")
         airtable_api = AirtableAPI()
         
-        # Parcourir chaque facture récupérée de Sellsy
         for invoice in invoices:
             formatted_invoice = airtable_api.format_invoice_for_airtable(invoice)
             airtable_api.insert_or_update_invoice(formatted_invoice)
+        
+        print("✅ Synchronisation terminée.")
     else:
-        print("Aucune facture récupérée depuis Sellsy.")
+        print("⚠️ Aucune facture récupérée depuis Sellsy.")
 
-# Exécution du processus de synchronisation
+# Exécution directe (à remplacer ou adapter selon ton client Sellsy)
 if __name__ == "__main__":
-    # Cette ligne devrait être remplacée par le client Sellsy qui permet de récupérer les factures
-    sellsy_api_client = None  # Remplacer par l'instance de ton client Sellsy
+    from sellsy_client import SellsyClient  # Ton client Sellsy à part
+    sellsy_api_client = SellsyClient()
     sync_invoices_to_airtable(sellsy_api_client)
