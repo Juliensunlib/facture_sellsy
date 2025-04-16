@@ -20,15 +20,24 @@ class AirtableAPI:
     
     def find_invoice_by_id(self, sellsy_id):
         """Recherche une facture dans Airtable par son ID Sellsy"""
+        print(f"Recherche de la facture Sellsy ID: {sellsy_id}")
         records = self.table.all(formula=f"{{ID_Facture}}='{sellsy_id}'")
+        if records:
+            print(f"Facture trouvée dans Airtable: {records[0]}")
+        else:
+            print("Aucune facture trouvée.")
         return records[0] if records else None
     
     def insert_or_update_invoice(self, invoice_data):
         """Insère ou met à jour une facture dans Airtable"""
         sellsy_id = invoice_data["ID_Facture"]
         
+        # Afficher les données de la facture avant insertion
+        print(f"Facture à insérer ou mettre à jour: {invoice_data}")
+        
         # Vérifier si la facture existe déjà
         existing_record = self.find_invoice_by_id(sellsy_id)
+        print(f"Facture existante trouvée: {existing_record}" if existing_record else "Aucune facture existante trouvée")
         
         if existing_record:
             # Mise à jour
@@ -38,6 +47,7 @@ class AirtableAPI:
             return record_id
         else:
             # Insertion
+            print(f"Ajout de la facture {sellsy_id} dans Airtable")
             record = self.table.create(invoice_data)
-            print(f"Facture {sellsy_id} ajoutée à Airtable")
+            print(f"Facture {sellsy_id} ajoutée à Airtable avec ID : {record['id']}")
             return record["id"]
