@@ -7,12 +7,14 @@ class AirtableAPI:
     
     def format_invoice_for_airtable(self, invoice):
         """Convertit une facture Sellsy au format Airtable"""
+        # Adaptation pour l'API v2 de Sellsy
+        # Les noms des champs ont peut-être changé, à ajuster selon la structure réelle
         return {
             "ID_Facture": invoice.get("id"),
-            "Numéro": invoice.get("reference"),
-            "Date": invoice.get("createdAt"),
-            "Client": invoice.get("clientCorporateName"),
-            "Montant_HT": invoice.get("totalAmountWithoutTaxes"),
+            "Numéro": invoice.get("number", invoice.get("reference")),
+            "Date": invoice.get("issueDate", invoice.get("createdAt")),
+            "Client": invoice.get("clientName", invoice.get("clientCorporateName")),
+            "Montant_HT": invoice.get("totalAmountWithoutVat", invoice.get("totalAmountWithoutTaxes")),
             "Montant_TTC": invoice.get("totalAmount"),
             "Statut": invoice.get("status"),
             "URL": f"https://sellsy.com/invoices/{invoice.get('id')}"
