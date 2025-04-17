@@ -57,10 +57,8 @@ def sync_missing_invoices(limit=1000):
     for idx, invoice in enumerate(all_invoices):
         try:
             invoice_id = str(invoice["id"])
-            # Vérifier si la facture existe déjà dans Airtable
-            existing = airtable.find_invoice_by_id(invoice_id)
             
-            # Récupérer les détails complets dans tous les cas
+            # Récupérer les détails complets de la facture
             invoice_details = sellsy.get_invoice_details(invoice_id)
             
             if not invoice_details:
@@ -70,16 +68,19 @@ def sync_missing_invoices(limit=1000):
             # Formater pour Airtable
             formatted_invoice = airtable.format_invoice_for_airtable(invoice_details)
             
-            if not existing:
-                # Si la facture n'existe pas, l'insérer
-                airtable.insert_or_update_invoice(formatted_invoice)
-                added_count += 1
-                print(f"✅ Facture {invoice_id} ajoutée ({idx+1}/{len(all_invoices)}).")
-            else:
-                # Si elle existe, la mettre à jour
-                airtable.insert_or_update_invoice(formatted_invoice)
+            # Utiliser la fonction insert_or_update_invoice qui fait déjà la vérification
+            existing_record = airtable.find_invoice_by_id(invoice_id)
+            
+            if existing_record:
+                record_id = existing_record["id"]
+                airtable.table.update(record_id, formatted_invoice)
                 updated_count += 1
                 print(f"🔄 Facture {invoice_id} mise à jour ({idx+1}/{len(all_invoices)}).")
+            else:
+                airtable.table.create(formatted_invoice)
+                added_count += 1
+                print(f"➕ Facture {invoice_id} ajoutée ({idx+1}/{len(all_invoices)}).")
+                
         except Exception as e:
             print(f"❌ Erreur lors du traitement de la facture {invoice.get('id')}: {e}")
     
