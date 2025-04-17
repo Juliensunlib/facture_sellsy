@@ -14,6 +14,9 @@ class AirtableAPI:
             print("⚠️ Données de facture invalides ou vides")
             return None
             
+        # Affichage des clés principales pour débogage
+        print(f"Structure de la facture - Clés principales: {list(invoice.keys())}")
+        
         # Récupérer l'ID client de Sellsy avec gestion des cas où les champs sont manquants
         client_id = None
         client_name = ""
@@ -55,15 +58,75 @@ class AirtableAPI:
         montant_ht = 0
         montant_ttc = 0
         
+        # Afficher les structures de données liées aux montants pour débogage
+        if "amounts" in invoice:
+            print(f"Structure amounts: {list(invoice['amounts'].keys())}")
+        if "amount" in invoice:
+            print(f"Structure amount: {list(invoice['amount'].keys())}")
+        
+        # Méthode 1: Chemins directs connus
         if "total_amount_without_taxes" in invoice:
             montant_ht = invoice["total_amount_without_taxes"]
         elif "amounts" in invoice and "total_excluding_tax" in invoice["amounts"]:
             montant_ht = invoice["amounts"]["total_excluding_tax"]
+        elif "amounts" in invoice and "tax_excl" in invoice["amounts"]:
+            montant_ht = invoice["amounts"]["tax_excl"]
+        elif "amount" in invoice and "tax_excl" in invoice["amount"]:
+            montant_ht = invoice["amount"]["tax_excl"]
             
         if "total_amount_with_taxes" in invoice:
             montant_ttc = invoice["total_amount_with_taxes"]
         elif "amounts" in invoice and "total_including_tax" in invoice["amounts"]:
             montant_ttc = invoice["amounts"]["total_including_tax"]
+        elif "amounts" in invoice and "tax_incl" in invoice["amounts"]:
+            montant_ttc = invoice["amounts"]["tax_incl"]
+        elif "amount" in invoice and "tax_incl" in invoice["amount"]:
+            montant_ttc = invoice["amount"]["tax_incl"]
+        
+        # Méthode 2: Recherche récursive si les montants n'ont pas été trouvés
+        if montant_ht == 0 or montant_ttc == 0:
+            print(f"⚠️ Montants incomplets, recherche de chemins alternatifs")
+            
+            # Parcourir récursivement pour trouver des clés contenant 'amount', 'total', etc.
+            for key, value in invoice.items():
+                if isinstance(value, dict):
+                    for subkey, subvalue in value.items():
+                        if montant_ht == 0 and isinstance(subvalue, (int, float)) and any(term in subkey.lower() for term in ["excluding", "excl", "ht", "without_tax"]):
+                            print(f"Montant HT trouvé à {key}.{subkey}: {subvalue}")
+                            montant_ht = subvalue
+                        if montant_ttc == 0 and isinstance(subvalue, (int, float)) and any(term in subkey.lower() for term in ["including", "incl", "ttc", "with_tax"]):
+                            print(f"Montant TTC trouvé à {key}.{subkey}: {subvalue}")
+                            montant_ttc = subvalue
+        
+        # Méthode 3: Recherche par mots-clés dans la structure complète
+        if montant_ht == 0 or montant_ttc == 0:
+            def search_in_dict(d, ht_keywords, ttc_keywords, path=""):
+                results = {"ht": 0, "ttc": 0}
+                for key, value in d.items():
+                    current_path = f"{path}.{key}" if path else key
+                    if isinstance(value, dict):
+                        sub_results = search_in_dict(value, ht_keywords, ttc_keywords, current_path)
+                        if sub_results["ht"] != 0 and results["ht"] == 0:
+                            results["ht"] = sub_results["ht"]
+                        if sub_results["ttc"] != 0 and results["ttc"] == 0:
+                            results["ttc"] = sub_results["ttc"]
+                    elif isinstance(value, (int, float)):
+                        if montant_ht == 0 and any(kw in key.lower() for kw in ht_keywords):
+                            print(f"Candidat montant HT trouvé à {current_path}: {value}")
+                            results["ht"] = value
+                        if montant_ttc == 0 and any(kw in key.lower() for kw in ttc_keywords):
+                            print(f"Candidat montant TTC trouvé à {current_path}: {value}")
+                            results["ttc"] = value
+                return results
+            
+            ht_keywords = ["without_tax", "excluding", "excl", "ht", "net"]
+            ttc_keywords = ["with_tax", "including", "incl", "ttc", "gross"]
+            
+            amount_results = search_in_dict(invoice, ht_keywords, ttc_keywords)
+            if amount_results["ht"] != 0 and montant_ht == 0:
+                montant_ht = amount_results["ht"]
+            if amount_results["ttc"] != 0 and montant_ttc == 0:
+                montant_ttc = amount_results["ttc"]
         
         # Récupération du numéro de facture
         reference = ""
@@ -76,7 +139,7 @@ class AirtableAPI:
         status = invoice.get("status", "")
         
         # Créer un dictionnaire avec des valeurs par défaut pour éviter les erreurs
-        return {
+        result = {
             "ID_Facture": str(invoice.get("id", "")),  # Conversion explicite en str
             "Numéro": reference,
             "Date": created_date,  # Date formatée correctement
@@ -87,6 +150,9 @@ class AirtableAPI:
             "Statut": status,
             "URL": f"https://go.sellsy.com/document/{invoice.get('id', '')}"
         }
+        
+        print(f"Montants finaux: HT={montant_ht}, TTC={montant_ttc}")
+        return result
 
     def find_invoice_by_id(self, sellsy_id):
         """Recherche une facture dans Airtable par son ID Sellsy"""
