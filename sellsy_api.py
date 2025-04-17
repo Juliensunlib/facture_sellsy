@@ -141,13 +141,14 @@ class SellsyAPI:
                         # Vérifier s'il y a d'autres pages
                         meta = response_data.get("meta", {})
                         pagination_info = meta.get("pagination", {})
-                        total_pages = pagination_info.get("nbPages", 0)
-                        total_items = pagination_info.get("nbResults", 0)
+                        total_pages = pagination_info.get("nbPages", 1)  # Défaut à 1 page si non spécifié
+                        total_items = pagination_info.get("nbResults", len(page_invoices))  # Utiliser le nombre d'éléments récupérés
                         
                         print(f"Total: {total_items} factures, {total_pages} pages")
                         
                         current_page += 1
-                        has_more = current_page <= total_pages and len(page_invoices) > 0
+                        # Si on a récupéré moins d'éléments que la page_size, c'est qu'il n'y a plus de données
+                        has_more = len(page_invoices) == page_size and current_page <= total_pages
                         print(f"Plus de pages disponibles: {has_more}")
                     except json.JSONDecodeError as e:
                         print(f"Erreur de décodage JSON: {e}")
@@ -179,14 +180,24 @@ class SellsyAPI:
         }
         
         url = f"{self.api_url}/invoices/{invoice_id}"
+        print(f"Récupération des détails de la facture {invoice_id}: {url}")
         
         try:
             response = requests.get(url, headers=headers)
+            print(f"Statut: {response.status_code}")
             
             if response.status_code == 200:
-                return response.json().get("data", {})
+                data = response.json()
+                if "data" in data:
+                    print(f"Détails de la facture {invoice_id} récupérés avec succès")
+                    return data.get("data", {})
+                else:
+                    print(f"Données manquantes dans la réponse pour la facture {invoice_id}")
+                    print(f"Aperçu de la réponse: {str(data)[:200]}...")
+                    return None
             else:
                 print(f"Erreur lors de la récupération des détails de la facture {invoice_id}: {response.text}")
+                # Si la facture n'existe pas ou si on n'a pas accès, on renvoie None
                 return None
         except Exception as e:
             print(f"Exception lors de la récupération des détails de la facture {invoice_id}: {e}")
