@@ -17,6 +17,9 @@ AIRTABLE_TABLE_NAME = os.getenv("AIRTABLE_TABLE_NAME")
 # Configuration du webhook
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "votre_secret_webhook")
 
+# Répertoire pour stocker les PDF des factures
+PDF_STORAGE_DIR = os.getenv("PDF_STORAGE_DIR", "pdf_invoices")
+
 # Vérification des variables requises
 missing_vars = []
 for var_name in ["SELLSY_CLIENT_ID", "SELLSY_CLIENT_SECRET", "AIRTABLE_API_KEY", "AIRTABLE_BASE_ID", "AIRTABLE_TABLE_NAME"]:
