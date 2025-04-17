@@ -71,4 +71,4 @@ async def handle_webhook(payload: dict = Depends(verify_webhook)):
         else:
             return {"status": "error", "message": "ID de ressource manquant dans l'événement"}
     
-    return {"status": "ignored", "message": "
+    return {"status": "ignored", "message": "Type d'événement non géré"}
