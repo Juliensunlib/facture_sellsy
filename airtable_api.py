@@ -1,6 +1,7 @@
 from pyairtable import Table
 from config import AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME
 import datetime
+import json
 
 class AirtableAPI:
     def __init__(self):
@@ -33,7 +34,7 @@ class AirtableAPI:
                     client_id = str(related.get("id", ""))
                     break
             # Si le nom n'est pas disponible directement
-            client_name = invoice.get("client_name", "Client #" + str(client_id) if client_id else "")
+            client_name = invoice.get("company_name", invoice.get("client_name", "Client #" + str(client_id) if client_id else ""))
         
         # Gestion de la date - vérifier plusieurs chemins possibles dans la structure JSON
         created_date = ""
@@ -69,6 +70,8 @@ class AirtableAPI:
             montant_ht = invoice["total_amount_without_taxes"]
         elif "amounts" in invoice and "total_excluding_tax" in invoice["amounts"]:
             montant_ht = invoice["amounts"]["total_excluding_tax"]
+        elif "amounts" in invoice and "total_excl_tax" in invoice["amounts"]:  # Ajouté
+            montant_ht = invoice["amounts"]["total_excl_tax"]
         elif "amounts" in invoice and "tax_excl" in invoice["amounts"]:
             montant_ht = invoice["amounts"]["tax_excl"]
         elif "amount" in invoice and "tax_excl" in invoice["amount"]:
@@ -78,14 +81,18 @@ class AirtableAPI:
             montant_ttc = invoice["total_amount_with_taxes"]
         elif "amounts" in invoice and "total_including_tax" in invoice["amounts"]:
             montant_ttc = invoice["amounts"]["total_including_tax"]
+        elif "amounts" in invoice and "total_incl_tax" in invoice["amounts"]:  # Ajouté
+            montant_ttc = invoice["amounts"]["total_incl_tax"]
         elif "amounts" in invoice and "tax_incl" in invoice["amounts"]:
             montant_ttc = invoice["amounts"]["tax_incl"]
         elif "amount" in invoice and "tax_incl" in invoice["amount"]:
             montant_ttc = invoice["amount"]["tax_incl"]
         
-        # Méthode 2: Recherche récursive si les montants n'ont pas été trouvés
+        # Méthode 2: Si les montants n'ont pas été trouvés, afficher la structure complète
         if montant_ht == 0 or montant_ttc == 0:
             print(f"⚠️ Montants incomplets, recherche de chemins alternatifs")
+            if "amounts" in invoice:
+                print(f"Structure complète de amounts: {json.dumps(invoice['amounts'], indent=2)}")
             
             # Parcourir récursivement pour trouver des clés contenant 'amount', 'total', etc.
             for key, value in invoice.items():
