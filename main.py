@@ -36,9 +36,12 @@ def sync_invoices(days=30):
                 # Formater pour Airtable
                 formatted_invoice = airtable.format_invoice_for_airtable(invoice_details)
                 
-                # Insérer ou mettre à jour dans Airtable
+                # Télécharger le PDF
+                pdf_path = sellsy.download_invoice_pdf(invoice_id)
+                
+                # Insérer ou mettre à jour dans Airtable avec le PDF
                 if formatted_invoice:
-                    airtable.insert_or_update_invoice(formatted_invoice)
+                    airtable.insert_or_update_invoice(formatted_invoice, pdf_path)
                     print(f"✅ Facture {invoice_id} traitée ({idx+1}/{len(invoices)}).")
                 else:
                     print(f"⚠️ La facture {invoice_id} n'a pas pu être formatée correctement")
@@ -46,8 +49,12 @@ def sync_invoices(days=30):
                 print(f"⚠️ Impossible de récupérer les détails de la facture {invoice_id} - utilisation des données de base")
                 # Utilisez les données de base si les détails ne sont pas disponibles
                 formatted_invoice = airtable.format_invoice_for_airtable(invoice)
+                
+                # Télécharger le PDF même avec les données de base
+                pdf_path = sellsy.download_invoice_pdf(invoice_id)
+                
                 if formatted_invoice:
-                    airtable.insert_or_update_invoice(formatted_invoice)
+                    airtable.insert_or_update_invoice(formatted_invoice, pdf_path)
                     print(f"✅ Facture {invoice_id} traitée avec données de base ({idx+1}/{len(invoices)}).")
                 else:
                     print(f"⚠️ La facture {invoice_id} n'a pas pu être formatée correctement, même avec les données de base")
@@ -88,9 +95,19 @@ def sync_missing_invoices(limit=1000):
             existing_record = airtable.find_invoice_by_id(invoice_id)
             
             if existing_record:
-                # Si la facture existe déjà, pas besoin de récupérer les détails complets
-                print(f"🔄 Facture {invoice_id} déjà présente dans Airtable, passage à la suivante.")
-                updated_count += 1
+                # Si la facture existe déjà, on peut quand même mettre à jour le PDF
+                print(f"🔄 Facture {invoice_id} déjà présente dans Airtable, mise à jour du PDF.")
+                pdf_path = sellsy.download_invoice_pdf(invoice_id)
+                
+                # Récupérer les détails pour la mise à jour
+                invoice_details = sellsy.get_invoice_details(invoice_id)
+                source_data = invoice_details if invoice_details else invoice
+                formatted_invoice = airtable.format_invoice_for_airtable(source_data)
+                
+                if formatted_invoice:
+                    airtable.insert_or_update_invoice(formatted_invoice, pdf_path)
+                    updated_count += 1
+                    print(f"✅ Facture {invoice_id} mise à jour avec PDF ({idx+1}/{len(all_invoices)}).")
                 continue
                 
             # Récupérer les détails complets de la facture
@@ -102,15 +119,18 @@ def sync_missing_invoices(limit=1000):
             if not invoice_details:
                 print(f"⚠️ Impossible de récupérer les détails de la facture {invoice_id} - utilisation des données de base")
             
+            # Télécharger le PDF pour cette facture
+            pdf_path = sellsy.download_invoice_pdf(invoice_id)
+            
             # Formater pour Airtable
             formatted_invoice = airtable.format_invoice_for_airtable(source_data)
             
             # Ajouter à Airtable
             if formatted_invoice:
                 try:
-                    airtable.insert_or_update_invoice(formatted_invoice)
+                    airtable.insert_or_update_invoice(formatted_invoice, pdf_path)
                     added_count += 1
-                    print(f"➕ Facture {invoice_id} ajoutée ({idx+1}/{len(all_invoices)}).")
+                    print(f"➕ Facture {invoice_id} ajoutée avec PDF ({idx+1}/{len(all_invoices)}).")
                 except Exception as e:
                     print(f"❌ Erreur lors de l'ajout de la facture {invoice_id} à Airtable: {e}")
                     error_count += 1
