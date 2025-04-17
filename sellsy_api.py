@@ -119,12 +119,11 @@ class SellsyAPI:
         
         all_invoices = []
         current_page = 1
-        has_more = True
-        page_size = 100 if limit > 100 else limit
+        page_size = 100  # Taille maximale de page supportée par l'API Sellsy
         
         print(f"Récupération de toutes les factures (limite: {limit})...")
         
-        while has_more and len(all_invoices) < limit:
+        while len(all_invoices) < limit:
             params = {
                 "page": current_page,
                 "limit": page_size
@@ -139,28 +138,36 @@ class SellsyAPI:
                 print(f"Statut de la réponse: {response.status_code}")
                 
                 if response.status_code == 200:
-                    try:
-                        response_data = response.json()
-                        page_invoices = response_data.get("data", [])
-                        all_invoices.extend(page_invoices)
-                        print(f"Page {current_page}: {len(page_invoices)} factures récupérées")
-                        
-                        # Vérifier s'il y a d'autres pages
-                        meta = response_data.get("meta", {})
-                        pagination_info = meta.get("pagination", {})
-                        total_pages = pagination_info.get("nbPages", 1)  # Défaut à 1 page si non spécifié
-                        total_items = pagination_info.get("nbResults", len(page_invoices))  # Utiliser le nombre d'éléments récupérés
-                        
-                        print(f"Total: {total_items} factures, {total_pages} pages")
-                        
-                        current_page += 1
-                        # Si on a récupéré moins d'éléments que la page_size, c'est qu'il n'y a plus de données
-                        has_more = len(page_invoices) == page_size and current_page <= total_pages
-                        print(f"Plus de pages disponibles: {has_more}")
-                    except json.JSONDecodeError as e:
-                        print(f"Erreur de décodage JSON: {e}")
-                        print(f"Aperçu de la réponse: {response.text[:200]}...")
+                    response_data = response.json()
+                    page_invoices = response_data.get("data", [])
+                    
+                    if not page_invoices:
+                        print("Aucune facture sur cette page, fin de la pagination")
                         break
+                        
+                    all_invoices.extend(page_invoices)
+                    print(f"Page {current_page}: {len(page_invoices)} factures récupérées. Total: {len(all_invoices)}")
+                    
+                    # Vérifier s'il y a d'autres pages
+                    meta = response_data.get("meta", {})
+                    pagination = meta.get("pagination", {})
+                    current_page_from_api = pagination.get("current", 1)
+                    total_pages = pagination.get("nbPages", 1)
+                    
+                    print(f"Pagination: Page {current_page_from_api}/{total_pages}")
+                    
+                    # Si nous sommes à la dernière page ou si nous avons moins de résultats que la taille de page
+                    if current_page_from_api >= total_pages or len(page_invoices) < page_size:
+                        print("Dernière page atteinte")
+                        break
+                    
+                    current_page += 1
+                    
+                    # Pause pour éviter de surcharger l'API
+                    if current_page > 1:
+                        print("Pause de 1 seconde pour éviter les limitations d'API...")
+                        time.sleep(1)
+                        
                 elif response.status_code == 401:
                     print("Token expiré, renouvellement...")
                     # Forcer le renouvellement du token
@@ -175,8 +182,10 @@ class SellsyAPI:
                 print(f"Exception lors de la récupération de la page {current_page}: {e}")
                 break
         
-        print(f"Total des factures récupérées: {len(all_invoices)}")
-        return all_invoices[:limit]
+        # Limiter le nombre de factures retournées à la limite spécifiée
+        result = all_invoices[:limit]
+        print(f"Total des factures récupérées: {len(result)} (sur {len(all_invoices)} disponibles)")
+        return result
 
     def get_invoice_details(self, invoice_id):
         """Récupère les détails d'une facture spécifique"""
