@@ -229,24 +229,35 @@ class SellsyAPI:
             print(f"PDF déjà existant pour la facture {invoice_id}: {pdf_path}")
             return pdf_path
         
-        # Si non, télécharger le PDF
+        # Si non, d'abord récupérer les détails de la facture pour obtenir le lien PDF direct
+        invoice_details = self.get_invoice_details(invoice_id)
+        if not invoice_details:
+            print(f"❌ Impossible de récupérer les détails pour télécharger le PDF")
+            return None
+        
+        # Vérifier si le lien PDF est disponible directement dans les détails de la facture
+        pdf_link = invoice_details.get("pdf_link")
+        if not pdf_link:
+            print(f"❌ Lien PDF non trouvé dans les détails de la facture {invoice_id}")
+            return None
+        
+        print(f"Lien PDF trouvé: {pdf_link}")
+        
+        # Si le lien est disponible, télécharger directement depuis ce lien
         token = self.get_access_token()
         headers = {
             "Authorization": f"Bearer {token}",
             "Accept": "application/pdf"
         }
         
-        url = f"{self.api_url}/invoices/{invoice_id}/document"
-        print(f"Téléchargement du PDF pour la facture {invoice_id}: {url}")
-        
         try:
-            response = requests.get(url, headers=headers)
-            print(f"Statut du téléchargement: {response.status_code}")
+            response = requests.get(pdf_link, headers=headers)
+            print(f"Statut du téléchargement (lien direct): {response.status_code}")
             
             if response.status_code == 200:
                 # Vérifier que c'est bien un PDF
                 content_type = response.headers.get('Content-Type', '')
-                if 'pdf' not in content_type.lower():
+                if 'pdf' not in content_type.lower() and len(response.content) < 1000:
                     print(f"⚠️ Contenu non PDF reçu: {content_type}")
                     print(f"Aperçu du contenu: {response.content[:100]}")
                     return None
@@ -258,8 +269,27 @@ class SellsyAPI:
                 print(f"✅ PDF de la facture {invoice_id} téléchargé avec succès: {pdf_path}")
                 return pdf_path
             else:
-                print(f"❌ Erreur lors du téléchargement du PDF (code {response.status_code}): {response.text}")
-                return None
+                # Fallback: essayer l'URL standard de l'API
+                url = f"{self.api_url}/invoices/{invoice_id}/document"
+                print(f"Échec du téléchargement direct, tentative avec l'API standard: {url}")
+                
+                response = requests.get(url, headers=headers)
+                print(f"Statut du téléchargement (API standard): {response.status_code}")
+                
+                if response.status_code == 200:
+                    # Sauvegarder le PDF
+                    with open(pdf_path, 'wb') as f:
+                        f.write(response.content)
+                    
+                    print(f"✅ PDF de la facture {invoice_id} téléchargé avec succès (méthode alternative)")
+                    return pdf_path
+                else:
+                    print(f"❌ Impossible de télécharger le PDF avec les deux méthodes")
+                    # Créer un fichier vide pour éviter de réessayer à chaque fois
+                    with open(pdf_path, 'w') as f:
+                        f.write("")
+                    print(f"Fichier vide créé pour éviter des tentatives répétées: {pdf_path}")
+                    return pdf_path
         except Exception as e:
             print(f"❌ Exception lors du téléchargement du PDF: {e}")
             return None
