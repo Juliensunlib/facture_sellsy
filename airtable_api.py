@@ -1,5 +1,6 @@
 from pyairtable import Table
 from config import AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME
+import datetime
 
 class AirtableAPI:
     def __init__(self):
@@ -17,22 +18,73 @@ class AirtableAPI:
         client_id = None
         client_name = ""
         
+        # Vérifier les différentes structures possibles de l'API Sellsy pour les informations client
         if "relation" in invoice:
             if "id" in invoice["relation"]:
                 client_id = str(invoice["relation"]["id"])
             if "name" in invoice["relation"]:
                 client_name = invoice["relation"]["name"]
+        elif "related" in invoice:
+            for related in invoice.get("related", []):
+                if related.get("type") == "individual" or related.get("type") == "corporation":
+                    client_id = str(related.get("id", ""))
+                    break
+            # Si le nom n'est pas disponible directement
+            client_name = invoice.get("client_name", "Client #" + str(client_id) if client_id else "")
+        
+        # Gestion de la date - vérifier plusieurs chemins possibles dans la structure JSON
+        created_date = ""
+        if "created_at" in invoice and invoice["created_at"]:
+            created_date = invoice["created_at"]
+        elif "date" in invoice and invoice["date"]:
+            created_date = invoice["date"]
+        elif "created" in invoice and invoice["created"]:
+            created_date = invoice["created"]
+        
+        # S'assurer que la date est au format YYYY-MM-DD pour Airtable
+        if created_date:
+            # Si la date contient un T (format ISO), prendre juste la partie date
+            if "T" in created_date:
+                created_date = created_date.split("T")[0]
+        else:
+            # Fournir une date par défaut si aucune n'est disponible
+            created_date = datetime.datetime.now().strftime("%Y-%m-%d")
+            print(f"⚠️ Date non trouvée pour la facture {invoice.get('id', 'inconnue')}, utilisation de la date actuelle")
+        
+        # Récupération des montants avec gestion des différentes structures possibles
+        montant_ht = 0
+        montant_ttc = 0
+        
+        if "total_amount_without_taxes" in invoice:
+            montant_ht = invoice["total_amount_without_taxes"]
+        elif "amounts" in invoice and "total_excluding_tax" in invoice["amounts"]:
+            montant_ht = invoice["amounts"]["total_excluding_tax"]
+            
+        if "total_amount_with_taxes" in invoice:
+            montant_ttc = invoice["total_amount_with_taxes"]
+        elif "amounts" in invoice and "total_including_tax" in invoice["amounts"]:
+            montant_ttc = invoice["amounts"]["total_including_tax"]
+        
+        # Récupération du numéro de facture
+        reference = ""
+        if "reference" in invoice and invoice["reference"]:
+            reference = invoice["reference"]
+        elif "number" in invoice and invoice["number"]:
+            reference = invoice["number"]
+            
+        # Récupération du statut
+        status = invoice.get("status", "")
         
         # Créer un dictionnaire avec des valeurs par défaut pour éviter les erreurs
         return {
             "ID_Facture": str(invoice.get("id", "")),  # Conversion explicite en str
-            "Numéro": invoice.get("reference", ""),
-            "Date": invoice.get("created_at", ""),
+            "Numéro": reference,
+            "Date": created_date,  # Date formatée correctement
             "Client": client_name,
             "ID_Client_Sellsy": client_id,  # Ajout de l'ID client Sellsy
-            "Montant_HT": invoice.get("total_amount_without_taxes", 0),
-            "Montant_TTC": invoice.get("total_amount_with_taxes", 0),
-            "Statut": invoice.get("status", ""),
+            "Montant_HT": montant_ht,
+            "Montant_TTC": montant_ttc,
+            "Statut": status,
             "URL": f"https://go.sellsy.com/document/{invoice.get('id', '')}"
         }
 
@@ -81,7 +133,8 @@ class AirtableAPI:
         except Exception as e:
             print(f"❌ Erreur lors de l'insertion/mise à jour de la facture {sellsy_id}: {e}")
             # Afficher les clés pour le débogage
-            print(f"Clés dans les données: {list(invoice_data.keys())}")
+            print(f"Clés dans les données: {list(invoice_data.keys()) if invoice_data else 'N/A'}")
+            print(f"Valeur du champ Date: '{invoice_data.get('Date', 'N/A')}'" if invoice_data else "N/A")
             raise e
 
 # Code principal pour synchroniser les factures Sellsy avec Airtable
