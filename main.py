@@ -5,7 +5,7 @@ import uvicorn
 from webhook_handler import app
 import time
 
-def sync_invoices(days=30):
+def sync_invoices(days=365):
     """Synchronise les factures des X derniers jours"""
     sellsy = SellsyAPI()
     airtable = AirtableAPI()
