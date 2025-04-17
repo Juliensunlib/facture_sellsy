@@ -39,7 +39,6 @@ class SellsyAPI:
         data = "grant_type=client_credentials"
         
         print(f"Tentative d'authentification à l'API Sellsy: {url}")
-        print(f"En-têtes d'authentification envoyés: {headers}")
         
         try:
             response = requests.post(url, headers=headers, data=data)
@@ -84,7 +83,7 @@ class SellsyAPI:
             "created_after": f"{start_date}T00:00:00Z"
         }
         
-        url = f"{self.api_url}/invoices/getAll"
+        url = f"{self.api_url}/invoices"
         print(f"Recherche des factures depuis {start_date}: {url}")
         
         try:
@@ -143,6 +142,10 @@ class SellsyAPI:
                         meta = response_data.get("meta", {})
                         pagination_info = meta.get("pagination", {})
                         total_pages = pagination_info.get("nbPages", 0)
+                        total_items = pagination_info.get("nbResults", 0)
+                        
+                        print(f"Total: {total_items} factures, {total_pages} pages")
+                        
                         current_page += 1
                         has_more = current_page <= total_pages and len(page_invoices) > 0
                         print(f"Plus de pages disponibles: {has_more}")
@@ -150,6 +153,13 @@ class SellsyAPI:
                         print(f"Erreur de décodage JSON: {e}")
                         print(f"Aperçu de la réponse: {response.text[:200]}...")
                         break
+                elif response.status_code == 401:
+                    print("Token expiré, renouvellement...")
+                    # Forcer le renouvellement du token
+                    self.token_expires_at = 0
+                    token = self.get_access_token()
+                    headers["Authorization"] = f"Bearer {token}"
+                    # Ne pas incrémenter la page pour réessayer
                 else:
                     print(f"Erreur lors de la récupération des factures (page {current_page}): {response.text}")
                     break
