@@ -17,6 +17,10 @@ async def verify_webhook(request: Request, x_sellsy_signature: str = Header(None
     
     body = await request.body()
     
+    # Log pour déboguer
+    print(f"Webhook reçu - Signature: {x_sellsy_signature}")
+    print(f"Contenu du webhook (premiers 100 caractères): {body[:100]}...")
+    
     # Calcul de la signature (HMAC SHA-256)
     signature = hmac.new(
         WEBHOOK_SECRET.encode(),
@@ -24,21 +28,27 @@ async def verify_webhook(request: Request, x_sellsy_signature: str = Header(None
         hashlib.sha256
     ).hexdigest()
     
+    print(f"Signature calculée: {signature}")
+    
     if not hmac.compare_digest(signature, x_sellsy_signature):
+        print("❌ Signature invalide, rejeter la requête")
         raise HTTPException(status_code=401, detail="Signature invalide")
     
+    print("✅ Signature validée")
     return json.loads(body)
 
 @app.post("/webhook/sellsy")
 async def handle_webhook(payload: dict = Depends(verify_webhook)):
     """Gère les webhooks entrants de Sellsy"""
     event_type = payload.get("event_type")
+    print(f"Événement reçu: {event_type}")
     
     # Adaptation pour l'API v2 de Sellsy
     if event_type in ["invoice.created", "invoice.updated"]:
         resource_id = payload.get("resource_id")
         
         if resource_id:
+            print(f"Traitement de la facture {resource_id} depuis le webhook")
             # Récupérer les détails complets de la facture
             invoice_details = sellsy.get_invoice_details(resource_id)
             
@@ -46,21 +56,16 @@ async def handle_webhook(payload: dict = Depends(verify_webhook)):
                 # Formater la facture pour Airtable
                 formatted_invoice = airtable.format_invoice_for_airtable(invoice_details)
                 
-                # Vérifier si la facture existe déjà
-                existing_record = airtable.find_invoice_by_id(resource_id)
+                if not formatted_invoice:
+                    return {"status": "error", "message": "Impossible de formater les données de la facture"}
                 
-                if existing_record:
-                    # Si elle existe, la mettre à jour
-                    record_id = existing_record["id"]
-                    airtable.table.update(record_id, formatted_invoice)
-                    action = "mise à jour"
-                else:
-                    # Sinon, la créer
-                    record = airtable.table.create(formatted_invoice)
-                    record_id = record["id"]
-                    action = "création"
-                
-                return {"status": "success", "message": f"Facture {resource_id} traitée dans Airtable ({action}, ID: {record_id})"}
+                # Insérer ou mettre à jour dans Airtable (utilise la fonction existante qui gère les deux cas)
+                try:
+                    record_id = airtable.insert_or_update_invoice(formatted_invoice)
+                    return {"status": "success", "message": f"Facture {resource_id} traitée dans Airtable (ID: {record_id})"}
+                except Exception as e:
+                    print(f"Erreur lors de l'insertion/mise à jour dans Airtable: {e}")
+                    return {"status": "error", "message": f"Erreur lors du traitement dans Airtable: {str(e)}"}
             else:
                 return {"status": "error", "message": f"Impossible de récupérer les détails de la facture {resource_id}"}
         else:
