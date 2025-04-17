@@ -26,10 +26,3 @@ for var_name in ["SELLSY_CLIENT_ID", "SELLSY_CLIENT_SECRET", "AIRTABLE_API_KEY",
 if missing_vars:
     print(f"ERREUR: Variables d'environnement manquantes: {', '.join(missing_vars)}")
     print("Assurez-vous que ces variables sont définies dans le fichier .env ou dans les secrets GitHub.")
-
-print(f"SELLSY_CLIENT_ID: {SELLSY_CLIENT_ID}")
-print(f"SELLSY_CLIENT_SECRET: {SELLSY_CLIENT_SECRET}")
-print(f"AIRTABLE_API_KEY: {AIRTABLE_API_KEY}")
-print(f"AIRTABLE_BASE_ID: {AIRTABLE_BASE_ID}")
-print(f"AIRTABLE_TABLE_NAME: {AIRTABLE_TABLE_NAME}")
-
