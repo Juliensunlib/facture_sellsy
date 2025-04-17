@@ -37,25 +37,20 @@ def sync_invoices(days=30):
                 formatted_invoice = airtable.format_invoice_for_airtable(invoice_details)
                 
                 # Insérer ou mettre à jour dans Airtable
-                airtable.insert_or_update_invoice(formatted_invoice)
-                print(f"✅ Facture {invoice_id} traitée ({idx+1}/{len(invoices)}).")
+                if formatted_invoice:
+                    airtable.insert_or_update_invoice(formatted_invoice)
+                    print(f"✅ Facture {invoice_id} traitée ({idx+1}/{len(invoices)}).")
+                else:
+                    print(f"⚠️ La facture {invoice_id} n'a pas pu être formatée correctement")
             else:
                 print(f"⚠️ Impossible de récupérer les détails de la facture {invoice_id} - utilisation des données de base")
                 # Utilisez les données de base si les détails ne sont pas disponibles
-                basic_invoice = {
-                    "id": invoice["id"],
-                    "reference": invoice.get("reference", ""),
-                    "status": invoice.get("status", ""),
-                    "created_at": invoice.get("created_at", ""),
-                    "total_amount_without_taxes": invoice.get("total_amount_without_taxes", 0),
-                    "total_amount_with_taxes": invoice.get("total_amount_with_taxes", 0),
-                    "relation": {
-                        "id": invoice.get("client_id", ""),
-                        "name": invoice.get("client_name", "")
-                    }
-                }
-                formatted_invoice = airtable.format_invoice_for_airtable(basic_invoice)
-                airtable.insert_or_update_invoice(formatted_invoice)
+                formatted_invoice = airtable.format_invoice_for_airtable(invoice)
+                if formatted_invoice:
+                    airtable.insert_or_update_invoice(formatted_invoice)
+                    print(f"✅ Facture {invoice_id} traitée avec données de base ({idx+1}/{len(invoices)}).")
+                else:
+                    print(f"⚠️ La facture {invoice_id} n'a pas pu être formatée correctement, même avec les données de base")
         except Exception as e:
             print(f"❌ Erreur lors du traitement de la facture {invoice.get('id')}: {e}")
     
@@ -101,33 +96,26 @@ def sync_missing_invoices(limit=1000):
             # Récupérer les détails complets de la facture
             invoice_details = sellsy.get_invoice_details(invoice_id)
             
+            # Source de données à utiliser (détails ou basique)
+            source_data = invoice_details if invoice_details else invoice
+            
             if not invoice_details:
                 print(f"⚠️ Impossible de récupérer les détails de la facture {invoice_id} - utilisation des données de base")
-                # Utilisez les données de base si les détails ne sont pas disponibles
-                basic_invoice = {
-                    "id": invoice["id"],
-                    "reference": invoice.get("reference", ""),
-                    "status": invoice.get("status", ""),
-                    "created_at": invoice.get("created_at", ""),
-                    "total_amount_without_taxes": invoice.get("total_amount_without_taxes", 0),
-                    "total_amount_with_taxes": invoice.get("total_amount_with_taxes", 0),
-                    "relation": {
-                        "id": invoice.get("client_id", ""),
-                        "name": invoice.get("client_name", "")
-                    }
-                }
-                formatted_invoice = airtable.format_invoice_for_airtable(basic_invoice)
-            else:
-                # Formater pour Airtable
-                formatted_invoice = airtable.format_invoice_for_airtable(invoice_details)
+            
+            # Formater pour Airtable
+            formatted_invoice = airtable.format_invoice_for_airtable(source_data)
             
             # Ajouter à Airtable
-            try:
-                airtable.table.create(formatted_invoice)
-                added_count += 1
-                print(f"➕ Facture {invoice_id} ajoutée ({idx+1}/{len(all_invoices)}).")
-            except Exception as e:
-                print(f"❌ Erreur lors de l'ajout de la facture {invoice_id} à Airtable: {e}")
+            if formatted_invoice:
+                try:
+                    airtable.insert_or_update_invoice(formatted_invoice)
+                    added_count += 1
+                    print(f"➕ Facture {invoice_id} ajoutée ({idx+1}/{len(all_invoices)}).")
+                except Exception as e:
+                    print(f"❌ Erreur lors de l'ajout de la facture {invoice_id} à Airtable: {e}")
+                    error_count += 1
+            else:
+                print(f"⚠️ La facture {invoice_id} n'a pas pu être formatée correctement")
                 error_count += 1
                 
         except Exception as e:
