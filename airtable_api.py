@@ -266,4 +266,4 @@ def sync_invoices_to_airtable(sellsy_api_client):
                 # Insérer ou mettre à jour avec le PDF
                 airtable_api.insert_or_update_invoice(formatted_invoice, pdf_path)
 
-        print("✅ Synchronisation termin
+        print("✅ Synchronisation terminée.")
