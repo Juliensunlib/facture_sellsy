@@ -71,9 +71,4 @@ async def handle_webhook(payload: dict = Depends(verify_webhook)):
         else:
             return {"status": "error", "message": "ID de ressource manquant dans l'événement"}
     
-    return {"status": "ignored", "message": "Événement non traité"}
-
-@app.get("/")
-async def root():
-    """Route racine pour vérifier que le serveur fonctionne"""
-    return {"status": "ok", "message": "Webhook Sellsy-Airtable opérationnel"}
+    return {"status": "ignored", "message": "
