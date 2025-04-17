@@ -8,25 +8,40 @@ class AirtableAPI:
 
     def format_invoice_for_airtable(self, invoice):
         """Convertit une facture Sellsy au format Airtable"""
-        # Récupérer l'ID client de Sellsy
+        # Vérifications de sécurité pour éviter les erreurs si des champs sont manquants
+        if not invoice:
+            print("⚠️ Données de facture invalides ou vides")
+            return None
+            
+        # Récupérer l'ID client de Sellsy avec gestion des cas où les champs sont manquants
         client_id = None
-        if "relation" in invoice and "id" in invoice["relation"]:
-            client_id = str(invoice["relation"]["id"])
+        client_name = ""
         
+        if "relation" in invoice:
+            if "id" in invoice["relation"]:
+                client_id = str(invoice["relation"]["id"])
+            if "name" in invoice["relation"]:
+                client_name = invoice["relation"]["name"]
+        
+        # Créer un dictionnaire avec des valeurs par défaut pour éviter les erreurs
         return {
-            "ID_Facture": str(invoice.get("id")),  # Conversion explicite en str
-            "Numéro": invoice.get("reference"),
-            "Date": invoice.get("created_at"),
-            "Client": invoice.get("relation", {}).get("name", ""),
+            "ID_Facture": str(invoice.get("id", "")),  # Conversion explicite en str
+            "Numéro": invoice.get("reference", ""),
+            "Date": invoice.get("created_at", ""),
+            "Client": client_name,
             "ID_Client_Sellsy": client_id,  # Ajout de l'ID client Sellsy
-            "Montant_HT": invoice.get("total_amount_without_taxes"),
-            "Montant_TTC": invoice.get("total_amount_with_taxes"),
-            "Statut": invoice.get("status"),
-            "URL": f"https://go.sellsy.com/document/{invoice.get('id')}"
+            "Montant_HT": invoice.get("total_amount_without_taxes", 0),
+            "Montant_TTC": invoice.get("total_amount_with_taxes", 0),
+            "Statut": invoice.get("status", ""),
+            "URL": f"https://go.sellsy.com/document/{invoice.get('id', '')}"
         }
 
     def find_invoice_by_id(self, sellsy_id):
         """Recherche une facture dans Airtable par son ID Sellsy"""
+        if not sellsy_id:
+            print("⚠️ ID Sellsy vide, impossible de rechercher la facture")
+            return None
+            
         sellsy_id = str(sellsy_id)  # Sécurité : conversion en chaîne
         formula = f"{{ID_Facture}}='{sellsy_id}'"
         print(f"🔍 Recherche dans Airtable avec formule : {formula}")
@@ -40,10 +55,18 @@ class AirtableAPI:
 
     def insert_or_update_invoice(self, invoice_data):
         """Insère ou met à jour une facture dans Airtable"""
-        sellsy_id = str(invoice_data["ID_Facture"])
-        existing_record = self.find_invoice_by_id(sellsy_id)
-
+        if not invoice_data:
+            print("❌ Données de facture invalides, impossible d'insérer/mettre à jour")
+            return None
+            
+        sellsy_id = str(invoice_data.get("ID_Facture", ""))
+        if not sellsy_id:
+            print("❌ ID Sellsy manquant dans les données, impossible d'insérer/mettre à jour")
+            return None
+            
         try:
+            existing_record = self.find_invoice_by_id(sellsy_id)
+
             if existing_record:
                 record_id = existing_record["id"]
                 print(f"🔁 Facture {sellsy_id} déjà présente, mise à jour en cours...")
@@ -75,7 +98,8 @@ def sync_invoices_to_airtable(sellsy_api_client):
         # Parcours des factures récupérées et insertion ou mise à jour dans Airtable
         for invoice in invoices:
             formatted_invoice = airtable_api.format_invoice_for_airtable(invoice)
-            airtable_api.insert_or_update_invoice(formatted_invoice)
+            if formatted_invoice:
+                airtable_api.insert_or_update_invoice(formatted_invoice)
 
         print("✅ Synchronisation terminée.")
     else:
@@ -83,6 +107,6 @@ def sync_invoices_to_airtable(sellsy_api_client):
 
 # Exécution directe (à remplacer ou adapter selon ton client Sellsy)
 if __name__ == "__main__":
-    from sellsy_client import SellsyClient  # Ton client Sellsy à part
-    sellsy_api_client = SellsyClient()
+    from sellsy_api import SellsyAPI  # Import your SellsyAPI class
+    sellsy_api_client = SellsyAPI()
     sync_invoices_to_airtable(sellsy_api_client)
