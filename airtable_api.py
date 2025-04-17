@@ -145,6 +145,17 @@ class AirtableAPI:
         # Récupération du statut
         status = invoice.get("status", "")
         
+        # Conversion explicite des montants en float pour éviter les problèmes avec Airtable
+        try:
+            montant_ht = float(montant_ht) if montant_ht else 0.0
+            montant_ttc = float(montant_ttc) if montant_ttc else 0.0
+        except (ValueError, TypeError) as e:
+            print(f"⚠️ Erreur lors de la conversion des montants: {e}")
+            print(f"Valeurs avant conversion: HT={montant_ht}, TTC={montant_ttc}")
+            # Assigner des valeurs par défaut en cas d'erreur
+            montant_ht = 0.0
+            montant_ttc = 0.0
+        
         # Créer un dictionnaire avec des valeurs par défaut pour éviter les erreurs
         result = {
             "ID_Facture": str(invoice.get("id", "")),  # Conversion explicite en str
@@ -152,13 +163,13 @@ class AirtableAPI:
             "Date": created_date,  # Date formatée correctement
             "Client": client_name,
             "ID_Client_Sellsy": client_id,  # Ajout de l'ID client Sellsy
-            "Montant_HT": montant_ht,
-            "Montant_TTC": montant_ttc,
+            "Montant_HT": montant_ht,  # Maintenant c'est un float
+            "Montant_TTC": montant_ttc,  # Maintenant c'est un float
             "Statut": status,
             "URL": f"https://go.sellsy.com/document/{invoice.get('id', '')}"
         }
         
-        print(f"Montants finaux: HT={montant_ht}, TTC={montant_ttc}")
+        print(f"Montants finaux (après conversion): HT={montant_ht} (type: {type(montant_ht)}), TTC={montant_ttc} (type: {type(montant_ttc)})")
         return result
 
     def find_invoice_by_id(self, sellsy_id):
