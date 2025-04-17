@@ -34,18 +34,18 @@ class AirtableAPI:
             for related in invoice.get("related", []):
                 if related.get("type") == "individual" or related.get("type") == "corporation":
                     client_id = str(related.get("id", ""))
+                    client_name = related.get("name", "")
                     break
             # Si le nom n'est pas disponible directement
-            client_name = invoice.get("company_name", invoice.get("client_name", "Client #" + str(client_id) if client_id else ""))
+            if not client_name:
+                client_name = invoice.get("company_name", invoice.get("client_name", "Client #" + str(client_id) if client_id else ""))
         
         # Gestion de la date - vérifier plusieurs chemins possibles dans la structure JSON
         created_date = ""
-        if "created_at" in invoice and invoice["created_at"]:
-            created_date = invoice["created_at"]
-        elif "date" in invoice and invoice["date"]:
-            created_date = invoice["date"]
-        elif "created" in invoice and invoice["created"]:
-            created_date = invoice["created"]
+        for date_field in ["created_at", "date", "created"]:
+            if date_field in invoice and invoice[date_field]:
+                created_date = invoice[date_field]
+                break
         
         # S'assurer que la date est au format YYYY-MM-DD pour Airtable
         if created_date:
@@ -61,88 +61,46 @@ class AirtableAPI:
         montant_ht = 0
         montant_ttc = 0
         
-        # Afficher les structures de données liées aux montants pour débogage
+        # Extraction des montants - simplification et amélioration de la robustesse
         if "amounts" in invoice:
             print(f"Structure amounts: {list(invoice['amounts'].keys())}")
-        if "amount" in invoice:
-            print(f"Structure amount: {list(invoice['amount'].keys())}")
+            amounts = invoice["amounts"]
+            # Essayer différentes clés possibles pour montant HT
+            for key in ["total_excluding_tax", "total_excl_tax", "tax_excl", "total_raw_excl_tax"]:
+                if key in amounts and amounts[key] is not None:
+                    montant_ht = amounts[key]
+                    break
+            
+            # Essayer différentes clés possibles pour montant TTC
+            for key in ["total_including_tax", "total_incl_tax", "tax_incl", "total_incl_tax"]:
+                if key in amounts and amounts[key] is not None:
+                    montant_ttc = amounts[key]
+                    break
         
-        # Méthode 1: Chemins directs connus
-        if "total_amount_without_taxes" in invoice:
+        # Fallback sur d'autres structures possibles si les montants sont toujours à 0
+        if montant_ht == 0 and "amount" in invoice:
+            amount = invoice["amount"]
+            if "tax_excl" in amount:
+                montant_ht = amount["tax_excl"]
+            
+        if montant_ttc == 0 and "amount" in invoice:
+            amount = invoice["amount"]
+            if "tax_incl" in amount:
+                montant_ttc = amount["tax_incl"]
+        
+        # Fallback sur les champs directs
+        if montant_ht == 0 and "total_amount_without_taxes" in invoice:
             montant_ht = invoice["total_amount_without_taxes"]
-        elif "amounts" in invoice and "total_excluding_tax" in invoice["amounts"]:
-            montant_ht = invoice["amounts"]["total_excluding_tax"]
-        elif "amounts" in invoice and "total_excl_tax" in invoice["amounts"]:  # Ajouté
-            montant_ht = invoice["amounts"]["total_excl_tax"]
-        elif "amounts" in invoice and "tax_excl" in invoice["amounts"]:
-            montant_ht = invoice["amounts"]["tax_excl"]
-        elif "amount" in invoice and "tax_excl" in invoice["amount"]:
-            montant_ht = invoice["amount"]["tax_excl"]
             
-        if "total_amount_with_taxes" in invoice:
+        if montant_ttc == 0 and "total_amount_with_taxes" in invoice:
             montant_ttc = invoice["total_amount_with_taxes"]
-        elif "amounts" in invoice and "total_including_tax" in invoice["amounts"]:
-            montant_ttc = invoice["amounts"]["total_including_tax"]
-        elif "amounts" in invoice and "total_incl_tax" in invoice["amounts"]:  # Ajouté
-            montant_ttc = invoice["amounts"]["total_incl_tax"]
-        elif "amounts" in invoice and "tax_incl" in invoice["amounts"]:
-            montant_ttc = invoice["amounts"]["tax_incl"]
-        elif "amount" in invoice and "tax_incl" in invoice["amount"]:
-            montant_ttc = invoice["amount"]["tax_incl"]
-        
-        # Méthode 2: Si les montants n'ont pas été trouvés, afficher la structure complète
-        if montant_ht == 0 or montant_ttc == 0:
-            print(f"⚠️ Montants incomplets, recherche de chemins alternatifs")
-            if "amounts" in invoice:
-                print(f"Structure complète de amounts: {json.dumps(invoice['amounts'], indent=2)}")
-            
-            # Parcourir récursivement pour trouver des clés contenant 'amount', 'total', etc.
-            for key, value in invoice.items():
-                if isinstance(value, dict):
-                    for subkey, subvalue in value.items():
-                        if montant_ht == 0 and isinstance(subvalue, (int, float)) and any(term in subkey.lower() for term in ["excluding", "excl", "ht", "without_tax"]):
-                            print(f"Montant HT trouvé à {key}.{subkey}: {subvalue}")
-                            montant_ht = subvalue
-                        if montant_ttc == 0 and isinstance(subvalue, (int, float)) and any(term in subkey.lower() for term in ["including", "incl", "ttc", "with_tax"]):
-                            print(f"Montant TTC trouvé à {key}.{subkey}: {subvalue}")
-                            montant_ttc = subvalue
-        
-        # Méthode 3: Recherche par mots-clés dans la structure complète
-        if montant_ht == 0 or montant_ttc == 0:
-            def search_in_dict(d, ht_keywords, ttc_keywords, path=""):
-                results = {"ht": 0, "ttc": 0}
-                for key, value in d.items():
-                    current_path = f"{path}.{key}" if path else key
-                    if isinstance(value, dict):
-                        sub_results = search_in_dict(value, ht_keywords, ttc_keywords, current_path)
-                        if sub_results["ht"] != 0 and results["ht"] == 0:
-                            results["ht"] = sub_results["ht"]
-                        if sub_results["ttc"] != 0 and results["ttc"] == 0:
-                            results["ttc"] = sub_results["ttc"]
-                    elif isinstance(value, (int, float)):
-                        if montant_ht == 0 and any(kw in key.lower() for kw in ht_keywords):
-                            print(f"Candidat montant HT trouvé à {current_path}: {value}")
-                            results["ht"] = value
-                        if montant_ttc == 0 and any(kw in key.lower() for kw in ttc_keywords):
-                            print(f"Candidat montant TTC trouvé à {current_path}: {value}")
-                            results["ttc"] = value
-                return results
-            
-            ht_keywords = ["without_tax", "excluding", "excl", "ht", "net"]
-            ttc_keywords = ["with_tax", "including", "incl", "ttc", "gross"]
-            
-            amount_results = search_in_dict(invoice, ht_keywords, ttc_keywords)
-            if amount_results["ht"] != 0 and montant_ht == 0:
-                montant_ht = amount_results["ht"]
-            if amount_results["ttc"] != 0 and montant_ttc == 0:
-                montant_ttc = amount_results["ttc"]
         
         # Récupération du numéro de facture
         reference = ""
-        if "reference" in invoice and invoice["reference"]:
-            reference = invoice["reference"]
-        elif "number" in invoice and invoice["number"]:
-            reference = invoice["number"]
+        for ref_field in ["reference", "number", "decimal_number"]:
+            if ref_field in invoice and invoice[ref_field]:
+                reference = invoice[ref_field]
+                break
             
         # Récupération du statut
         status = invoice.get("status", "")
@@ -206,22 +164,27 @@ class AirtableAPI:
         # Ajouter la pièce jointe PDF si elle existe
         if pdf_path and os.path.exists(pdf_path):
             try:
-                # Lire le fichier PDF
-                with open(pdf_path, 'rb') as file:
-                    pdf_content = file.read()
-                
-                # Encoder en base64
-                pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
-                
-                # Ajouter à l'objet invoice_data
-                invoice_data["Facture_PDF"] = [
-                    {
-                        "filename": os.path.basename(pdf_path),
-                        "content": pdf_base64,
-                        "type": "application/pdf"
-                    }
-                ]
-                print(f"✅ Pièce jointe PDF préparée pour la facture {sellsy_id}")
+                # Vérifier si le fichier n'est pas vide
+                file_size = os.path.getsize(pdf_path)
+                if file_size > 0:
+                    # Lire le fichier PDF
+                    with open(pdf_path, 'rb') as file:
+                        pdf_content = file.read()
+                    
+                    # Encoder en base64
+                    pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
+                    
+                    # Ajouter à l'objet invoice_data
+                    invoice_data["Facture_PDF"] = [
+                        {
+                            "filename": os.path.basename(pdf_path),
+                            "content": pdf_base64,
+                            "type": "application/pdf"
+                        }
+                    ]
+                    print(f"✅ Pièce jointe PDF préparée pour la facture {sellsy_id}")
+                else:
+                    print(f"⚠️ Fichier PDF vide pour la facture {sellsy_id}, impossible d'ajouter la pièce jointe")
             except Exception as e:
                 print(f"❌ Erreur lors de la préparation du PDF pour Airtable: {e}")
             
