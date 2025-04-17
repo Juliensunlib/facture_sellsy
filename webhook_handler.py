@@ -46,9 +46,21 @@ async def handle_webhook(payload: dict = Depends(verify_webhook)):
                 # Formater la facture pour Airtable
                 formatted_invoice = airtable.format_invoice_for_airtable(invoice_details)
                 
-                # Insertion ou mise à jour dans Airtable
-                record_id = airtable.insert_or_update_invoice(formatted_invoice)
-                return {"status": "success", "message": f"Facture {resource_id} traitée dans Airtable (ID: {record_id})"}
+                # Vérifier si la facture existe déjà
+                existing_record = airtable.find_invoice_by_id(resource_id)
+                
+                if existing_record:
+                    # Si elle existe, la mettre à jour
+                    record_id = existing_record["id"]
+                    airtable.table.update(record_id, formatted_invoice)
+                    action = "mise à jour"
+                else:
+                    # Sinon, la créer
+                    record = airtable.table.create(formatted_invoice)
+                    record_id = record["id"]
+                    action = "création"
+                
+                return {"status": "success", "message": f"Facture {resource_id} traitée dans Airtable ({action}, ID: {record_id})"}
             else:
                 return {"status": "error", "message": f"Impossible de récupérer les détails de la facture {resource_id}"}
         else:
