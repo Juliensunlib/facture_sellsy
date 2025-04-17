@@ -92,8 +92,9 @@ class SellsyAPI:
             
             if response.status_code == 200:
                 data = response.json()
-                print(f"Nombre de factures trouvées: {len(data.get('data', []))}")
-                return data.get("data", [])
+                invoices = data.get("data", [])
+                print(f"Nombre de factures trouvées: {len(invoices)}")
+                return invoices
             else:
                 print(f"Erreur lors de la récupération des factures: {response.text}")
                 return []
@@ -188,13 +189,14 @@ class SellsyAPI:
             
             if response.status_code == 200:
                 data = response.json()
+                # Vérifier si les données sont directement dans la réponse ou dans un champ "data"
                 if "data" in data:
-                    print(f"Détails de la facture {invoice_id} récupérés avec succès")
+                    print(f"Détails de la facture {invoice_id} récupérés avec succès (format avec data)")
                     return data.get("data", {})
                 else:
-                    print(f"Données manquantes dans la réponse pour la facture {invoice_id}")
-                    print(f"Aperçu de la réponse: {str(data)[:200]}...")
-                    return None
+                    # Les données sont directement dans la réponse
+                    print(f"Détails de la facture {invoice_id} récupérés avec succès (format direct)")
+                    return data
             else:
                 print(f"Erreur lors de la récupération des détails de la facture {invoice_id}: {response.text}")
                 # Si la facture n'existe pas ou si on n'a pas accès, on renvoie None
