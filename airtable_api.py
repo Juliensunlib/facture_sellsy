@@ -8,11 +8,17 @@ class AirtableAPI:
 
     def format_invoice_for_airtable(self, invoice):
         """Convertit une facture Sellsy au format Airtable"""
+        # Récupérer l'ID client de Sellsy
+        client_id = None
+        if "relation" in invoice and "id" in invoice["relation"]:
+            client_id = str(invoice["relation"]["id"])
+        
         return {
             "ID_Facture": str(invoice.get("id")),  # Conversion explicite en str
             "Numéro": invoice.get("reference"),
             "Date": invoice.get("created_at"),
             "Client": invoice.get("relation", {}).get("name", ""),
+            "ID_Client_Sellsy": client_id,  # Ajout de l'ID client Sellsy
             "Montant_HT": invoice.get("total_amount_without_taxes"),
             "Montant_TTC": invoice.get("total_amount_with_taxes"),
             "Statut": invoice.get("status"),
@@ -37,17 +43,23 @@ class AirtableAPI:
         sellsy_id = str(invoice_data["ID_Facture"])
         existing_record = self.find_invoice_by_id(sellsy_id)
 
-        if existing_record:
-            record_id = existing_record["id"]
-            print(f"🔁 Facture {sellsy_id} déjà présente, mise à jour en cours...")
-            self.table.update(record_id, invoice_data)
-            print(f"✅ Facture {sellsy_id} mise à jour avec succès.")
-            return record_id
-        else:
-            print(f"➕ Facture {sellsy_id} non trouvée, insertion en cours...")
-            record = self.table.create(invoice_data)
-            print(f"✅ Facture {sellsy_id} ajoutée avec succès à Airtable (ID: {record['id']}).")
-            return record["id"]
+        try:
+            if existing_record:
+                record_id = existing_record["id"]
+                print(f"🔁 Facture {sellsy_id} déjà présente, mise à jour en cours...")
+                self.table.update(record_id, invoice_data)
+                print(f"✅ Facture {sellsy_id} mise à jour avec succès.")
+                return record_id
+            else:
+                print(f"➕ Facture {sellsy_id} non trouvée, insertion en cours...")
+                record = self.table.create(invoice_data)
+                print(f"✅ Facture {sellsy_id} ajoutée avec succès à Airtable (ID: {record['id']}).")
+                return record['id']
+        except Exception as e:
+            print(f"❌ Erreur lors de l'insertion/mise à jour de la facture {sellsy_id}: {e}")
+            # Afficher les clés pour le débogage
+            print(f"Clés dans les données: {list(invoice_data.keys())}")
+            raise e
 
 # Code principal pour synchroniser les factures Sellsy avec Airtable
 def sync_invoices_to_airtable(sellsy_api_client):
