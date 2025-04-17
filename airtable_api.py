@@ -2,6 +2,8 @@ from pyairtable import Table
 from config import AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME
 import datetime
 import json
+import base64
+import os
 
 class AirtableAPI:
     def __init__(self):
@@ -167,6 +169,7 @@ class AirtableAPI:
             "Montant_TTC": montant_ttc,  # Maintenant c'est un float
             "Statut": status,
             "URL": f"https://go.sellsy.com/document/{invoice.get('id', '')}"
+            # Le PDF sera ajouté séparément via une autre méthode
         }
         
         print(f"Montants finaux (après conversion): HT={montant_ht} (type: {type(montant_ht)}), TTC={montant_ttc} (type: {type(montant_ttc)})")
@@ -189,8 +192,8 @@ class AirtableAPI:
             print(f"❌ Erreur lors de la recherche de la facture {sellsy_id} : {e}")
             return None
 
-    def insert_or_update_invoice(self, invoice_data):
-        """Insère ou met à jour une facture dans Airtable"""
+    def insert_or_update_invoice(self, invoice_data, pdf_path=None):
+        """Insère ou met à jour une facture dans Airtable avec PDF"""
         if not invoice_data:
             print("❌ Données de facture invalides, impossible d'insérer/mettre à jour")
             return None
@@ -199,6 +202,28 @@ class AirtableAPI:
         if not sellsy_id:
             print("❌ ID Sellsy manquant dans les données, impossible d'insérer/mettre à jour")
             return None
+        
+        # Ajouter la pièce jointe PDF si elle existe
+        if pdf_path and os.path.exists(pdf_path):
+            try:
+                # Lire le fichier PDF
+                with open(pdf_path, 'rb') as file:
+                    pdf_content = file.read()
+                
+                # Encoder en base64
+                pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
+                
+                # Ajouter à l'objet invoice_data
+                invoice_data["Facture_PDF"] = [
+                    {
+                        "filename": os.path.basename(pdf_path),
+                        "content": pdf_base64,
+                        "type": "application/pdf"
+                    }
+                ]
+                print(f"✅ Pièce jointe PDF préparée pour la facture {sellsy_id}")
+            except Exception as e:
+                print(f"❌ Erreur lors de la préparation du PDF pour Airtable: {e}")
             
         try:
             existing_record = self.find_invoice_by_id(sellsy_id)
@@ -236,14 +261,9 @@ def sync_invoices_to_airtable(sellsy_api_client):
         for invoice in invoices:
             formatted_invoice = airtable_api.format_invoice_for_airtable(invoice)
             if formatted_invoice:
-                airtable_api.insert_or_update_invoice(formatted_invoice)
+                # Télécharger le PDF pour cette facture
+                pdf_path = sellsy_api_client.download_invoice_pdf(invoice["id"])
+                # Insérer ou mettre à jour avec le PDF
+                airtable_api.insert_or_update_invoice(formatted_invoice, pdf_path)
 
-        print("✅ Synchronisation terminée.")
-    else:
-        print("⚠️ Aucune facture récupérée depuis Sellsy.")
-
-# Exécution directe (à remplacer ou adapter selon ton client Sellsy)
-if __name__ == "__main__":
-    from sellsy_api import SellsyAPI  # Import your SellsyAPI class
-    sellsy_api_client = SellsyAPI()
-    sync_invoices_to_airtable(sellsy_api_client)
+        print("✅ Synchronisation termin
