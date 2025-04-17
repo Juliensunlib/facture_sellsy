@@ -18,16 +18,22 @@ def sync_invoices(days=30):
     
     print(f"{len(invoices)} factures trouvées.")
     
-    for invoice in invoices:
-        # Récupérer les détails complets si nécessaire
-        invoice_details = sellsy.get_invoice_details(invoice["id"])
-        
-        if invoice_details:
-            # Formater pour Airtable
-            formatted_invoice = airtable.format_invoice_for_airtable(invoice_details)
+    for idx, invoice in enumerate(invoices):
+        try:
+            # Récupérer les détails complets si nécessaire
+            invoice_details = sellsy.get_invoice_details(invoice["id"])
             
-            # Insérer ou mettre à jour dans Airtable
-            airtable.insert_or_update_invoice(formatted_invoice)
+            if invoice_details:
+                # Formater pour Airtable
+                formatted_invoice = airtable.format_invoice_for_airtable(invoice_details)
+                
+                # Insérer ou mettre à jour dans Airtable
+                airtable.insert_or_update_invoice(formatted_invoice)
+                print(f"✅ Facture {invoice['id']} traitée ({idx+1}/{len(invoices)}).")
+            else:
+                print(f"⚠️ Impossible de récupérer les détails de la facture {invoice['id']}")
+        except Exception as e:
+            print(f"❌ Erreur lors du traitement de la facture {invoice['id']}: {e}")
     
     print("Synchronisation terminée.")
 
@@ -46,23 +52,38 @@ def sync_missing_invoices(limit=1000):
     print(f"{len(all_invoices)} factures trouvées dans Sellsy.")
     
     added_count = 0
-    for invoice in all_invoices:
-        # Vérifier si la facture existe déjà dans Airtable
-        existing = airtable.find_invoice_by_id(invoice["id"])
-        
-        if not existing:
-            # Si la facture n'existe pas, récupérer les détails complets
-            invoice_details = sellsy.get_invoice_details(invoice["id"])
+    updated_count = 0
+    
+    for idx, invoice in enumerate(all_invoices):
+        try:
+            invoice_id = str(invoice["id"])
+            # Vérifier si la facture existe déjà dans Airtable
+            existing = airtable.find_invoice_by_id(invoice_id)
             
-            if invoice_details:
-                # Formater pour Airtable
-                formatted_invoice = airtable.format_invoice_for_airtable(invoice_details)
+            # Récupérer les détails complets dans tous les cas
+            invoice_details = sellsy.get_invoice_details(invoice_id)
+            
+            if not invoice_details:
+                print(f"⚠️ Impossible de récupérer les détails de la facture {invoice_id}")
+                continue
                 
-                # Insérer dans Airtable
+            # Formater pour Airtable
+            formatted_invoice = airtable.format_invoice_for_airtable(invoice_details)
+            
+            if not existing:
+                # Si la facture n'existe pas, l'insérer
                 airtable.insert_or_update_invoice(formatted_invoice)
                 added_count += 1
+                print(f"✅ Facture {invoice_id} ajoutée ({idx+1}/{len(all_invoices)}).")
+            else:
+                # Si elle existe, la mettre à jour
+                airtable.insert_or_update_invoice(formatted_invoice)
+                updated_count += 1
+                print(f"🔄 Facture {invoice_id} mise à jour ({idx+1}/{len(all_invoices)}).")
+        except Exception as e:
+            print(f"❌ Erreur lors du traitement de la facture {invoice.get('id')}: {e}")
     
-    print(f"Synchronisation terminée. {added_count} nouvelles factures ajoutées.")
+    print(f"Synchronisation terminée. {added_count} nouvelles factures ajoutées, {updated_count} factures mises à jour.")
 
 def start_webhook_server(host="0.0.0.0", port=8000):
     """Démarre le serveur webhook"""
