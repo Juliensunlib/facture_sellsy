@@ -2,7 +2,8 @@ import requests
 import json
 import time
 import base64
-from config import SELLSY_CLIENT_ID, SELLSY_CLIENT_SECRET, SELLSY_API_URL
+import os
+from config import SELLSY_CLIENT_ID, SELLSY_CLIENT_SECRET, SELLSY_API_URL, PDF_STORAGE_DIR
 
 class SellsyAPI:
     def __init__(self):
@@ -13,6 +14,11 @@ class SellsyAPI:
         # Vérifier que les identifiants sont bien définis (sans les afficher)
         if not SELLSY_CLIENT_ID or not SELLSY_CLIENT_SECRET:
             print("ERREUR: Identifiants Sellsy manquants dans les variables d'environnement")
+        
+        # Créer le répertoire de stockage des PDF s'il n'existe pas
+        if not os.path.exists(PDF_STORAGE_DIR):
+            os.makedirs(PDF_STORAGE_DIR)
+            print(f"Répertoire de stockage des PDF créé: {PDF_STORAGE_DIR}")
 
     def get_access_token(self):
         """Obtient ou renouvelle le token d'accès Sellsy selon la documentation v2"""
@@ -203,4 +209,57 @@ class SellsyAPI:
                 return None
         except Exception as e:
             print(f"Exception lors de la récupération des détails de la facture {invoice_id}: {e}")
+            return None
+    
+    def download_invoice_pdf(self, invoice_id):
+        """Télécharge le PDF d'une facture et retourne le chemin du fichier"""
+        if not invoice_id:
+            print("❌ ID de facture invalide pour le téléchargement du PDF")
+            return None
+        
+        # Conversion explicite en string
+        invoice_id = str(invoice_id)
+        
+        # Définir le chemin du fichier PDF
+        pdf_filename = f"facture_{invoice_id}.pdf"
+        pdf_path = os.path.join(PDF_STORAGE_DIR, pdf_filename)
+        
+        # Vérifier si le fichier existe déjà
+        if os.path.exists(pdf_path):
+            print(f"PDF déjà existant pour la facture {invoice_id}: {pdf_path}")
+            return pdf_path
+        
+        # Si non, télécharger le PDF
+        token = self.get_access_token()
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/pdf"
+        }
+        
+        url = f"{self.api_url}/invoices/{invoice_id}/document"
+        print(f"Téléchargement du PDF pour la facture {invoice_id}: {url}")
+        
+        try:
+            response = requests.get(url, headers=headers)
+            print(f"Statut du téléchargement: {response.status_code}")
+            
+            if response.status_code == 200:
+                # Vérifier que c'est bien un PDF
+                content_type = response.headers.get('Content-Type', '')
+                if 'pdf' not in content_type.lower():
+                    print(f"⚠️ Contenu non PDF reçu: {content_type}")
+                    print(f"Aperçu du contenu: {response.content[:100]}")
+                    return None
+                
+                # Sauvegarder le PDF
+                with open(pdf_path, 'wb') as f:
+                    f.write(response.content)
+                
+                print(f"✅ PDF de la facture {invoice_id} téléchargé avec succès: {pdf_path}")
+                return pdf_path
+            else:
+                print(f"❌ Erreur lors du téléchargement du PDF (code {response.status_code}): {response.text}")
+                return None
+        except Exception as e:
+            print(f"❌ Exception lors du téléchargement du PDF: {e}")
             return None
