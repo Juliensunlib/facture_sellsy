@@ -133,6 +133,7 @@ class SellsyAPI:
                     self.token_expires_at = 0
                     token = self.get_access_token()
                     headers["Authorization"] = f"Bearer {token}"
+                    # Ne pas incrémenter la page pour réessayer la même page
                 else:
                     print(f"Erreur lors de la récupération des factures (page {current_page}): {response.text}")
                     break
@@ -201,7 +202,7 @@ class SellsyAPI:
                     self.token_expires_at = 0
                     token = self.get_access_token()
                     headers["Authorization"] = f"Bearer {token}"
-                    # Ne pas incrémenter la page pour réessayer
+                    # Ne pas incrémenter current_page car on va réessayer cette même page
                 else:
                     print(f"Erreur lors de la récupération des factures (page {current_page}): {response.text}")
                     break
