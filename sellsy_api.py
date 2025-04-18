@@ -82,31 +82,66 @@ class SellsyAPI:
         # Calculer la date de début (il y a X jours)
         start_date = time.strftime("%Y-%m-%d", time.localtime(time.time() - days * 86400))
         
-        # Paramètres de recherche pour les factures - adaptés à l'API v2
-        params = {
-            "page": 1,
-            "limit": 100,
-            "created_after": f"{start_date}T00:00:00Z"
-        }
+        all_invoices = []
+        current_page = 1
+        page_size = 100
         
-        url = f"{self.api_url}/invoices"
-        print(f"Recherche des factures depuis {start_date}: {url}")
+        print(f"Recherche des factures depuis {start_date}")
         
-        try:
-            response = requests.get(url, headers=headers, params=params)
-            print(f"Statut de la réponse: {response.status_code}")
+        while True:
+            # Paramètres de recherche pour les factures
+            params = {
+                "page": current_page,
+                "limit": page_size,
+                "created_after": f"{start_date}T00:00:00Z"
+            }
             
-            if response.status_code == 200:
-                data = response.json()
-                invoices = data.get("data", [])
-                print(f"Nombre de factures trouvées: {len(invoices)}")
-                return invoices
-            else:
-                print(f"Erreur lors de la récupération des factures: {response.text}")
-                return []
-        except Exception as e:
-            print(f"Exception lors de la récupération des factures: {e}")
-            return []
+            url = f"{self.api_url}/invoices"
+            print(f"Récupération de la page {current_page}: {url}")
+            
+            try:
+                response = requests.get(url, headers=headers, params=params)
+                print(f"Statut de la réponse: {response.status_code}")
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    page_invoices = data.get("data", [])
+                    
+                    # Si la page est vide, on a fini
+                    if not page_invoices:
+                        print("Page vide reçue, fin de la pagination")
+                        break
+                        
+                    all_invoices.extend(page_invoices)
+                    print(f"Page {current_page}: {len(page_invoices)} factures récupérées")
+                    
+                    # Si on a récupéré moins de factures que la taille de page, c'est qu'on a fini
+                    if len(page_invoices) < page_size:
+                        print("Dernière page atteinte (page incomplète)")
+                        break
+                    
+                    # Passer à la page suivante
+                    current_page += 1
+                    
+                    # Pause pour éviter de surcharger l'API
+                    if current_page > 1:
+                        print("Pause de 1 seconde entre les requêtes...")
+                        time.sleep(1)
+                elif response.status_code == 401:
+                    print("Token expiré, renouvellement...")
+                    # Forcer le renouvellement du token
+                    self.token_expires_at = 0
+                    token = self.get_access_token()
+                    headers["Authorization"] = f"Bearer {token}"
+                else:
+                    print(f"Erreur lors de la récupération des factures (page {current_page}): {response.text}")
+                    break
+            except Exception as e:
+                print(f"Exception lors de la récupération de la page {current_page}: {e}")
+                break
+        
+        print(f"Total des factures récupérées: {len(all_invoices)}")
+        return all_invoices
 
     def get_all_invoices(self, limit=1000):
         """Récupère toutes les factures (avec une limite)"""
@@ -138,45 +173,28 @@ class SellsyAPI:
                 print(f"Statut de la réponse: {response.status_code}")
                 
                 if response.status_code == 200:
-                    try:
-                        response_data = response.json()
-                        page_invoices = response_data.get("data", [])
-                        
-                        # Si la page est vide, on a fini
-                        if not page_invoices:
-                            print("Page vide reçue, fin de la pagination")
-                            break
-                            
-                        all_invoices.extend(page_invoices)
-                        print(f"Page {current_page}: {len(page_invoices)} factures récupérées")
-                        
-                        # Vérifier s'il y a d'autres pages en utilisant les informations de pagination
-                        meta = response_data.get("meta", {})
-                        pagination_info = meta.get("pagination", {})
-                        
-                        current_page_index = pagination_info.get("page", 1)
-                        total_pages = pagination_info.get("nbPages", 1)
-                        total_items = pagination_info.get("nbResults", 0)
-                        
-                        print(f"Page actuelle: {current_page_index}/{total_pages} pages, Total: {total_items} factures")
-                        
-                        # Vérifier si nous sommes à la dernière page
-                        if current_page_index >= total_pages:
-                            print("Dernière page atteinte")
-                            break
-                        
-                        # Passer à la page suivante
-                        current_page += 1
-                        
-                        # Pause pour éviter de surcharger l'API
-                        if current_page > 1:
-                            print("Pause de 1 seconde entre les requêtes...")
-                            time.sleep(1)
-                            
-                    except json.JSONDecodeError as e:
-                        print(f"Erreur de décodage JSON: {e}")
-                        print(f"Aperçu de la réponse: {response.text[:200]}...")
+                    response_data = response.json()
+                    page_invoices = response_data.get("data", [])
+                    
+                    # Si la page est vide, on a fini
+                    if not page_invoices:
+                        print("Page vide reçue, fin de la pagination")
                         break
+                        
+                    all_invoices.extend(page_invoices)
+                    print(f"Page {current_page}: {len(page_invoices)} factures récupérées")
+                    
+                    # Si on a récupéré moins de factures que la taille de page, c'est qu'on a fini
+                    if len(page_invoices) < page_size:
+                        print("Dernière page atteinte (page incomplète)")
+                        break
+                    
+                    # Passer à la page suivante
+                    current_page += 1
+                    
+                    # Pause pour éviter de surcharger l'API
+                    print("Pause de 1 seconde entre les requêtes...")
+                    time.sleep(1)
                 elif response.status_code == 401:
                     print("Token expiré, renouvellement...")
                     # Forcer le renouvellement du token
