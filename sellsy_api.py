@@ -85,6 +85,7 @@ class SellsyAPI:
         all_invoices = []
         current_page = 1
         page_size = 100
+        max_retries = 3  # Limite de tentatives pour éviter les boucles infinies
         
         print(f"Recherche des factures depuis {start_date}")
         
@@ -99,50 +100,63 @@ class SellsyAPI:
             url = f"{self.api_url}/invoices"
             print(f"Récupération de la page {current_page}: {url}")
             
-            try:
-                response = requests.get(url, headers=headers, params=params)
-                print(f"Statut de la réponse: {response.status_code}")
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    page_invoices = data.get("data", [])
+            retry_count = 0
+            while retry_count < max_retries:
+                try:
+                    response = requests.get(url, headers=headers, params=params)
+                    print(f"Statut de la réponse: {response.status_code}")
                     
-                    # Si la page est vide, on a fini
-                    if not page_invoices:
-                        print("Page vide reçue, fin de la pagination")
-                        break
+                    if response.status_code == 200:
+                        data = response.json()
+                        page_invoices = data.get("data", [])
                         
-                    all_invoices.extend(page_invoices)
-                    print(f"Page {current_page}: {len(page_invoices)} factures récupérées")
-                    
-                    # Si on a récupéré moins de factures que la taille de page, c'est qu'on a fini
-                    if len(page_invoices) < page_size:
-                        print("Dernière page atteinte (page incomplète)")
-                        break
-                    
-                    # Passer à la page suivante
-                    current_page += 1
-                    
-                    # Pause pour éviter de surcharger l'API
-                    if current_page > 1:
-                        print("Pause de 1 seconde entre les requêtes...")
-                        time.sleep(1)
-                elif response.status_code == 401:
-                    print("Token expiré, renouvellement...")
-                    # Forcer le renouvellement du token
-                    self.token_expires_at = 0
-                    token = self.get_access_token()
-                    headers["Authorization"] = f"Bearer {token}"
-                    # Ne pas incrémenter la page pour réessayer la même page
-                else:
-                    print(f"Erreur lors de la récupération des factures (page {current_page}): {response.text}")
-                    break
-            except Exception as e:
-                print(f"Exception lors de la récupération de la page {current_page}: {e}")
-                break
-        
-        print(f"Total des factures récupérées: {len(all_invoices)}")
-        return all_invoices
+                        # Si la page est vide, on a fini
+                        if not page_invoices:
+                            print("Page vide reçue, fin de la pagination")
+                            return all_invoices
+                            
+                        all_invoices.extend(page_invoices)
+                        print(f"Page {current_page}: {len(page_invoices)} factures récupérées (total: {len(all_invoices)})")
+                        
+                        # Si on a récupéré moins de factures que la taille de page, c'est qu'on a fini
+                        if len(page_invoices) < page_size:
+                            print("Dernière page atteinte (page incomplète)")
+                            return all_invoices
+                        
+                        # Passer à la page suivante et sortir de la boucle de tentatives
+                        current_page += 1
+                        
+                        # Pause pour éviter de surcharger l'API
+                        if current_page > 1:
+                            print("Pause de 1 seconde entre les requêtes...")
+                            time.sleep(1)
+                        break  # Sort de la boucle de tentatives
+                        
+                    elif response.status_code == 401:
+                        print("Token expiré, renouvellement...")
+                        # Forcer le renouvellement du token
+                        self.token_expires_at = 0
+                        token = self.get_access_token()
+                        headers["Authorization"] = f"Bearer {token}"
+                        print(f"Nouveau token obtenu, nouvel essai pour la page {current_page}")
+                        retry_count += 1
+                        # Pas de pause, on réessaie immédiatement
+                    else:
+                        print(f"Erreur lors de la récupération des factures (page {current_page}): {response.text}")
+                        return all_invoices
+                except Exception as e:
+                    print(f"Exception lors de la récupération de la page {current_page}: {e}")
+                    retry_count += 1
+                    if retry_count >= max_retries:
+                        print(f"Nombre maximum de tentatives atteint pour la page {current_page}")
+                        return all_invoices
+                    print(f"Tentative {retry_count}/{max_retries} après 2 secondes...")
+                    time.sleep(2)
+            
+            # Si on a atteint le nombre maximum de tentatives sans succès
+            if retry_count >= max_retries:
+                print(f"Impossible de récupérer la page {current_page} après {max_retries} tentatives")
+                return all_invoices
 
     def get_all_invoices(self, limit=1000):
         """Récupère toutes les factures (avec une limite)"""
@@ -156,6 +170,7 @@ class SellsyAPI:
         all_invoices = []
         current_page = 1
         page_size = 100 if limit > 100 else limit
+        max_retries = 3  # Limite de tentatives pour éviter les boucles infinies
         
         print(f"Récupération de toutes les factures (limite: {limit})...")
         
@@ -166,49 +181,66 @@ class SellsyAPI:
             }
             
             url = f"{self.api_url}/invoices"
-            
             print(f"Récupération de la page {current_page}: {url}")
             
-            try:
-                response = requests.get(url, headers=headers, params=params)
-                print(f"Statut de la réponse: {response.status_code}")
-                
-                if response.status_code == 200:
-                    response_data = response.json()
-                    page_invoices = response_data.get("data", [])
+            retry_count = 0
+            success = False
+            
+            while retry_count < max_retries and not success:
+                try:
+                    response = requests.get(url, headers=headers, params=params)
+                    print(f"Statut de la réponse: {response.status_code}")
                     
-                    # Si la page est vide, on a fini
-                    if not page_invoices:
-                        print("Page vide reçue, fin de la pagination")
-                        break
+                    if response.status_code == 200:
+                        response_data = response.json()
+                        page_invoices = response_data.get("data", [])
                         
-                    all_invoices.extend(page_invoices)
-                    print(f"Page {current_page}: {len(page_invoices)} factures récupérées")
-                    
-                    # Si on a récupéré moins de factures que la taille de page, c'est qu'on a fini
-                    if len(page_invoices) < page_size:
-                        print("Dernière page atteinte (page incomplète)")
-                        break
-                    
-                    # Passer à la page suivante
-                    current_page += 1
-                    
-                    # Pause pour éviter de surcharger l'API
-                    print("Pause de 1 seconde entre les requêtes...")
-                    time.sleep(1)
-                elif response.status_code == 401:
-                    print("Token expiré, renouvellement...")
-                    # Forcer le renouvellement du token
-                    self.token_expires_at = 0
-                    token = self.get_access_token()
-                    headers["Authorization"] = f"Bearer {token}"
-                    # Ne pas incrémenter current_page car on va réessayer cette même page
-                else:
-                    print(f"Erreur lors de la récupération des factures (page {current_page}): {response.text}")
-                    break
-            except Exception as e:
-                print(f"Exception lors de la récupération de la page {current_page}: {e}")
-                break
+                        # Si la page est vide, on a fini
+                        if not page_invoices:
+                            print("Page vide reçue, fin de la pagination")
+                            return all_invoices[:limit]
+                            
+                        all_invoices.extend(page_invoices)
+                        print(f"Page {current_page}: {len(page_invoices)} factures récupérées (total: {len(all_invoices)})")
+                        
+                        # Si on a récupéré moins de factures que la taille de page, c'est qu'on a fini
+                        if len(page_invoices) < page_size:
+                            print("Dernière page atteinte (page incomplète)")
+                            return all_invoices[:limit]
+                        
+                        # Passer à la page suivante
+                        current_page += 1
+                        success = True
+                        
+                        # Pause pour éviter de surcharger l'API
+                        print("Pause de 1 seconde entre les requêtes...")
+                        time.sleep(1)
+                        
+                    elif response.status_code == 401:
+                        print("Token expiré, renouvellement...")
+                        # Forcer le renouvellement du token
+                        self.token_expires_at = 0
+                        token = self.get_access_token()
+                        headers["Authorization"] = f"Bearer {token}"
+                        print(f"Nouveau token obtenu, nouvel essai pour la page {current_page}")
+                        retry_count += 1
+                        # Pas de pause, on réessaie immédiatement
+                    else:
+                        print(f"Erreur lors de la récupération des factures (page {current_page}): {response.text}")
+                        return all_invoices[:limit]
+                except Exception as e:
+                    print(f"Exception lors de la récupération de la page {current_page}: {e}")
+                    retry_count += 1
+                    if retry_count >= max_retries:
+                        print(f"Nombre maximum de tentatives atteint pour la page {current_page}")
+                        return all_invoices[:limit]
+                    print(f"Tentative {retry_count}/{max_retries} après 2 secondes...")
+                    time.sleep(2)
+            
+            # Si on a atteint le nombre maximum de tentatives sans succès
+            if not success:
+                print(f"Impossible de récupérer la page {current_page} après {max_retries} tentatives")
+                return all_invoices[:limit]
         
         print(f"Total des factures récupérées: {len(all_invoices)}")
         return all_invoices[:limit]
@@ -238,6 +270,24 @@ class SellsyAPI:
                     # Les données sont directement dans la réponse
                     print(f"Détails de la facture {invoice_id} récupérés avec succès (format direct)")
                     return data
+            elif response.status_code == 401:
+                # Renouveler le token et réessayer une fois
+                print("Token expiré, renouvellement pour les détails de facture...")
+                self.token_expires_at = 0
+                token = self.get_access_token()
+                headers["Authorization"] = f"Bearer {token}"
+                
+                # Nouvel essai avec le token renouvelé
+                response = requests.get(url, headers=headers)
+                if response.status_code == 200:
+                    data = response.json()
+                    if "data" in data:
+                        return data.get("data", {})
+                    else:
+                        return data
+                else:
+                    print(f"Échec après renouvellement du token: {response.text}")
+                    return None
             else:
                 print(f"Erreur lors de la récupération des détails de la facture {invoice_id}: {response.text}")
                 # Si la facture n'existe pas ou si on n'a pas accès, on renvoie None
@@ -303,6 +353,22 @@ class SellsyAPI:
                 
                 print(f"✅ PDF de la facture {invoice_id} téléchargé avec succès: {pdf_path}")
                 return pdf_path
+            elif response.status_code == 401:
+                # Renouveler le token et réessayer
+                print("Token expiré, renouvellement pour le téléchargement du PDF...")
+                self.token_expires_at = 0
+                token = self.get_access_token()
+                headers["Authorization"] = f"Bearer {token}"
+                
+                # Nouvel essai avec le token renouvelé
+                response = requests.get(pdf_link, headers=headers)
+                if response.status_code == 200:
+                    with open(pdf_path, 'wb') as f:
+                        f.write(response.content)
+                    print(f"✅ PDF de la facture {invoice_id} téléchargé avec succès après renouvellement du token")
+                    return pdf_path
+                else:
+                    print(f"Échec après renouvellement du token pour le PDF: {response.status_code}")
             else:
                 # Fallback: essayer l'URL standard de l'API
                 url = f"{self.api_url}/invoices/{invoice_id}/document"
