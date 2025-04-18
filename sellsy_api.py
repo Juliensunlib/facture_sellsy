@@ -60,7 +60,7 @@ class SellsyAPI:
             raise Exception(f"Impossible de se connecter à l'API Sellsy: {e}")
 
     def get_invoices(self, days=365):
-        """Récupère les factures des derniers jours spécifiés"""
+        """Récupère les factures des derniers jours spécifiés (par défaut 1 an)"""
         token = self.get_access_token()
         headers = {
             "Authorization": f"Bearer {token}",
@@ -124,8 +124,8 @@ class SellsyAPI:
         print(f"Total des factures récupérées: {len(all_invoices)}")
         return all_invoices
 
-    def get_all_invoices(self, limit=1000):
-        """Récupère toutes les factures (avec une limite)"""
+    def get_all_invoices(self):
+        """Récupère toutes les factures sans limite"""
         token = self.get_access_token()
         headers = {
             "Authorization": f"Bearer {token}",
@@ -135,15 +135,14 @@ class SellsyAPI:
         
         all_invoices = []
         current_page = 1
-        page_size = 100 if limit > 100 else limit
         has_more_pages = True
         
-        print(f"Récupération de toutes les factures (limite: {limit})...")
+        print(f"Récupération de toutes les factures...")
         
-        while has_more_pages and len(all_invoices) < limit:
+        while has_more_pages:
             params = {
                 "page": current_page,
-                "limit": page_size
+                "limit": 100  # Taille de page maximale autorisée par l'API
             }
             
             url = f"{self.api_url}/invoices"
@@ -155,7 +154,8 @@ class SellsyAPI:
                 if response.status_code == 200:
                     data = response.json()
                     page_invoices = data.get("data", [])
-                    total_pages = data.get("pagination", {}).get("nbPages", 1)
+                    pagination = data.get("pagination", {})
+                    total_pages = pagination.get("nbPages", 1)
                     
                     if not page_invoices:
                         print("Page vide reçue, fin de la pagination")
@@ -169,7 +169,7 @@ class SellsyAPI:
                         has_more_pages = False
                     else:
                         current_page += 1
-                        time.sleep(1)
+                        time.sleep(1)  # Pause entre les requêtes pour éviter la limitation d'API
                         
                 elif response.status_code == 401:
                     print("Token expiré, renouvellement...")
@@ -184,7 +184,7 @@ class SellsyAPI:
                 has_more_pages = False
         
         print(f"Total des factures récupérées: {len(all_invoices)}")
-        return all_invoices[:limit]
+        return all_invoices
 
     def get_invoice_details(self, invoice_id):
         """Récupère les détails d'une facture spécifique"""
