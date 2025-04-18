@@ -121,9 +121,9 @@ class SellsyAPI:
         while len(all_invoices) < limit:
             # Construction des paramètres de la requête
             params = {
-                "page": current_page,
                 "limit": page_size,
-                "sort": "created",           # Tri par date de création
+                "offset": (current_page - 1) * page_size,  # Utiliser offset au lieu de page
+                "order": "created",           # Tri par date de création
                 "direction": "desc"          # Ordre décroissant (plus récent d'abord)
             }
             
@@ -131,7 +131,7 @@ class SellsyAPI:
             params.update(filters)
             
             url = f"{self.api_url}/invoices"
-            print(f"📄 Récupération de la page {current_page}: {url}")
+            print(f"📄 Récupération de la page {current_page} (offset {params['offset']}): {url}")
             
             # Gestion des tentatives pour cette page
             retry_count = 0
