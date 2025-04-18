@@ -119,12 +119,11 @@ class SellsyAPI:
         
         all_invoices = []
         current_page = 1
-        has_more = True
         page_size = 100 if limit > 100 else limit
         
         print(f"Récupération de toutes les factures (limite: {limit})...")
         
-        while has_more and len(all_invoices) < limit:
+        while len(all_invoices) < limit:
             params = {
                 "page": current_page,
                 "limit": page_size
@@ -142,21 +141,38 @@ class SellsyAPI:
                     try:
                         response_data = response.json()
                         page_invoices = response_data.get("data", [])
+                        
+                        # Si la page est vide, on a fini
+                        if not page_invoices:
+                            print("Page vide reçue, fin de la pagination")
+                            break
+                            
                         all_invoices.extend(page_invoices)
                         print(f"Page {current_page}: {len(page_invoices)} factures récupérées")
                         
-                        # Vérifier s'il y a d'autres pages
+                        # Vérifier s'il y a d'autres pages en utilisant les informations de pagination
                         meta = response_data.get("meta", {})
                         pagination_info = meta.get("pagination", {})
-                        total_pages = pagination_info.get("nbPages", 1)  # Défaut à 1 page si non spécifié
-                        total_items = pagination_info.get("nbResults", len(page_invoices))  # Utiliser le nombre d'éléments récupérés
                         
-                        print(f"Total: {total_items} factures, {total_pages} pages")
+                        current_page_index = pagination_info.get("page", 1)
+                        total_pages = pagination_info.get("nbPages", 1)
+                        total_items = pagination_info.get("nbResults", 0)
                         
+                        print(f"Page actuelle: {current_page_index}/{total_pages} pages, Total: {total_items} factures")
+                        
+                        # Vérifier si nous sommes à la dernière page
+                        if current_page_index >= total_pages:
+                            print("Dernière page atteinte")
+                            break
+                        
+                        # Passer à la page suivante
                         current_page += 1
-                        # Si on a récupéré moins d'éléments que la page_size, c'est qu'il n'y a plus de données
-                        has_more = len(page_invoices) == page_size and current_page <= total_pages
-                        print(f"Plus de pages disponibles: {has_more}")
+                        
+                        # Pause pour éviter de surcharger l'API
+                        if current_page > 1:
+                            print("Pause de 1 seconde entre les requêtes...")
+                            time.sleep(1)
+                            
                     except json.JSONDecodeError as e:
                         print(f"Erreur de décodage JSON: {e}")
                         print(f"Aperçu de la réponse: {response.text[:200]}...")
