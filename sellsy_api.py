@@ -59,7 +59,7 @@ class SellsyAPI:
             print(f"Erreur de connexion à l'API Sellsy: {e}")
             raise Exception(f"Impossible de se connecter à l'API Sellsy: {e}")
 
-    def get_invoices(self, days=30):
+    def get_invoices(self, days=365):
         """Récupère les factures des derniers jours spécifiés"""
         token = self.get_access_token()
         headers = {
