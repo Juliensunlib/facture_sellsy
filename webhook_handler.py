@@ -20,13 +20,21 @@ app = FastAPI()
 sellsy = SellsyAPI()
 airtable = AirtableAPI()
 
-async def verify_webhook(request: Request, x_sellsy_signature: str = Header(None)):
+async def verify_webhook(request: Request):
     """Vérifie la signature du webhook Sellsy (v2)"""
     client_ip = request.client.host if request.client else "unknown"
     logger.info(f"Webhook request received from {client_ip}")
     
+    # Récupérer tous les headers pour déboguer
+    headers = dict(request.headers.items())
+    logger.info(f"Received headers: {headers}")
+    
+    # Vérifier tous les headers possibles pour la signature Sellsy
+    # Sellsy peut utiliser différents formats de header selon la configuration
+    sellsy_signature = headers.get('x-sellsy-signature') or headers.get('X-Sellsy-Signature') or headers.get('x-sellsy-signature-256') or headers.get('X-Sellsy-Signature-256')
+    
     # Vérifier si la signature est présente
-    if not x_sellsy_signature:
+    if not sellsy_signature:
         logger.warning("Missing Sellsy signature in request")
         raise HTTPException(status_code=401, detail="Signature manquante")
     
@@ -34,7 +42,7 @@ async def verify_webhook(request: Request, x_sellsy_signature: str = Header(None
     body = await request.body()
     
     # Log pour déboguer
-    logger.info(f"Webhook received - Signature: {x_sellsy_signature}")
+    logger.info(f"Webhook received - Signature: {sellsy_signature}")
     body_str = body.decode('utf-8') if body else "empty"
     logger.info(f"Raw body content (first 200 chars): {body_str[:200]}...")
     
@@ -61,10 +69,10 @@ async def verify_webhook(request: Request, x_sellsy_signature: str = Header(None
         ).hexdigest()
         
         logger.info(f"Calculated signature: {signature}")
-        logger.info(f"Comparing with received signature: {x_sellsy_signature}")
+        logger.info(f"Comparing with received signature: {sellsy_signature}")
         
         # Comparaison sécurisée des signatures
-        if not hmac.compare_digest(signature, x_sellsy_signature):
+        if not hmac.compare_digest(signature, sellsy_signature):
             logger.warning("❌ Invalid signature, rejecting request")
             raise HTTPException(status_code=401, detail="Signature invalide")
         
@@ -81,67 +89,76 @@ async def verify_webhook(request: Request, x_sellsy_signature: str = Header(None
         raise HTTPException(status_code=400, detail="Corps de requête JSON invalide")
 
 @app.post("/webhook/sellsy")
-async def handle_webhook(payload: dict = Depends(verify_webhook)):
+async def handle_webhook(request: Request):
     """Gère les webhooks entrants de Sellsy"""
-    event_type = payload.get("event_type")
-    resource_id = payload.get("resource_id", "unknown")
-    logger.info(f"Processing webhook: {event_type} for resource {resource_id}")
-    
-    # Adaptation pour l'API v2 de Sellsy
-    if event_type in ["invoice.created", "invoice.updated"]:
-        if not resource_id:
-            logger.error("Resource ID missing in the event payload")
-            return {"status": "error", "message": "ID de ressource manquant dans l'événement"}
+    try:
+        payload = await verify_webhook(request)
         
-        logger.info(f"Traitement de la facture {resource_id} depuis le webhook")
+        event_type = payload.get("event_type")
+        resource_id = payload.get("resource_id", "unknown")
+        logger.info(f"Processing webhook: {event_type} for resource {resource_id}")
         
-        try:
-            # Récupérer les détails complets de la facture
-            logger.info(f"Récupération des détails de la facture {resource_id}...")
-            invoice_details = sellsy.get_invoice_details(resource_id)
+        # Adaptation pour l'API v2 de Sellsy
+        if event_type in ["invoice.created", "invoice.updated"]:
+            if not resource_id:
+                logger.error("Resource ID missing in the event payload")
+                return {"status": "error", "message": "ID de ressource manquant dans l'événement"}
             
-            if not invoice_details:
-                logger.error(f"Impossible de récupérer les détails de la facture {resource_id}")
-                return {"status": "error", "message": f"Impossible de récupérer les détails de la facture {resource_id}"}
+            logger.info(f"Traitement de la facture {resource_id} depuis le webhook")
             
-            logger.info(f"Détails de la facture {resource_id} récupérés avec succès")
-            
-            # Formater la facture pour Airtable
-            logger.info("Formatage des données de la facture pour Airtable...")
-            formatted_invoice = airtable.format_invoice_for_airtable(invoice_details)
-            
-            if not formatted_invoice:
-                logger.error("Échec du formatage des données de la facture")
-                return {"status": "error", "message": "Impossible de formater les données de la facture"}
-            
-            logger.info("Données de la facture formatées avec succès")
-            
-            # Télécharger le PDF de la facture
-            logger.info(f"Téléchargement du PDF de la facture {resource_id}...")
-            pdf_path = sellsy.download_invoice_pdf(resource_id)
-            logger.info(f"PDF téléchargé: {pdf_path if pdf_path else 'échec'}")
-            
-            # Insérer ou mettre à jour dans Airtable
-            logger.info("Insertion/mise à jour dans Airtable...")
-            record_id = airtable.insert_or_update_invoice(formatted_invoice, pdf_path)
-            
-            logger.info(f"✅ Facture {resource_id} traitée avec succès dans Airtable (ID: {record_id})")
-            return {
-                "status": "success", 
-                "message": f"Facture {resource_id} traitée dans Airtable (ID: {record_id})",
-                "timestamp": str(datetime.now())
-            }
-            
-        except Exception as e:
-            logger.exception(f"Exception lors du traitement du webhook pour la facture {resource_id}: {e}")
-            return {
-                "status": "error", 
-                "message": f"Erreur lors du traitement: {str(e)}",
-                "timestamp": str(datetime.now())
-            }
-    else:
-        logger.info(f"Type d'événement non géré: {event_type}")
-        return {"status": "ignored", "message": f"Type d'événement non géré: {event_type}"}
+            try:
+                # Récupérer les détails complets de la facture
+                logger.info(f"Récupération des détails de la facture {resource_id}...")
+                invoice_details = sellsy.get_invoice_details(resource_id)
+                
+                if not invoice_details:
+                    logger.error(f"Impossible de récupérer les détails de la facture {resource_id}")
+                    return {"status": "error", "message": f"Impossible de récupérer les détails de la facture {resource_id}"}
+                
+                logger.info(f"Détails de la facture {resource_id} récupérés avec succès")
+                
+                # Formater la facture pour Airtable
+                logger.info("Formatage des données de la facture pour Airtable...")
+                formatted_invoice = airtable.format_invoice_for_airtable(invoice_details)
+                
+                if not formatted_invoice:
+                    logger.error("Échec du formatage des données de la facture")
+                    return {"status": "error", "message": "Impossible de formater les données de la facture"}
+                
+                logger.info("Données de la facture formatées avec succès")
+                
+                # Télécharger le PDF de la facture
+                logger.info(f"Téléchargement du PDF de la facture {resource_id}...")
+                pdf_path = sellsy.download_invoice_pdf(resource_id)
+                logger.info(f"PDF téléchargé: {pdf_path if pdf_path else 'échec'}")
+                
+                # Insérer ou mettre à jour dans Airtable
+                logger.info("Insertion/mise à jour dans Airtable...")
+                record_id = airtable.insert_or_update_invoice(formatted_invoice, pdf_path)
+                
+                logger.info(f"✅ Facture {resource_id} traitée avec succès dans Airtable (ID: {record_id})")
+                return {
+                    "status": "success", 
+                    "message": f"Facture {resource_id} traitée dans Airtable (ID: {record_id})",
+                    "timestamp": str(datetime.now())
+                }
+                
+            except Exception as e:
+                logger.exception(f"Exception lors du traitement du webhook pour la facture {resource_id}: {e}")
+                return {
+                    "status": "error", 
+                    "message": f"Erreur lors du traitement: {str(e)}",
+                    "timestamp": str(datetime.now())
+                }
+        else:
+            logger.info(f"Type d'événement non géré: {event_type}")
+            return {"status": "ignored", "message": f"Type d'événement non géré: {event_type}"}
+    except HTTPException as http_ex:
+        # Réutiliser l'exception HTTP déjà levée
+        raise http_ex
+    except Exception as e:
+        logger.exception(f"Erreur non gérée dans le handler webhook: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur interne du serveur: {str(e)}")
 
 @app.get("/webhook/test")
 async def test_webhook():
