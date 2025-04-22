@@ -30,8 +30,13 @@ async def verify_webhook(request: Request):
     logger.info(f"Received headers: {headers}")
     
     # Vérifier tous les headers possibles pour la signature Sellsy
-    # Sellsy peut utiliser différents formats de header selon la configuration
-    sellsy_signature = headers.get('x-sellsy-signature') or headers.get('X-Sellsy-Signature') or headers.get('x-sellsy-signature-256') or headers.get('X-Sellsy-Signature-256')
+    # Ajouter x-webhook-signature qui est le format utilisé selon les logs
+    sellsy_signature = (headers.get('x-sellsy-signature') or 
+                        headers.get('X-Sellsy-Signature') or 
+                        headers.get('x-sellsy-signature-256') or 
+                        headers.get('X-Sellsy-Signature-256') or
+                        headers.get('x-webhook-signature') or
+                        headers.get('X-Webhook-Signature'))
     
     # Vérifier si la signature est présente
     if not sellsy_signature:
@@ -62,11 +67,22 @@ async def verify_webhook(request: Request):
     
     # Calcul de la signature (HMAC SHA-256)
     try:
-        signature = hmac.new(
-            WEBHOOK_SECRET.encode(),
-            body,
-            hashlib.sha256
-        ).hexdigest()
+        # Vérifier si la signature reçue est au format SHA-1 ou SHA-256
+        # La longueur d'une signature SHA-1 est de 40 caractères hexadécimaux
+        if len(sellsy_signature) == 40:
+            logger.info("Using SHA-1 for signature verification")
+            signature = hmac.new(
+                WEBHOOK_SECRET.encode(),
+                body,
+                hashlib.sha1
+            ).hexdigest()
+        else:
+            logger.info("Using SHA-256 for signature verification")
+            signature = hmac.new(
+                WEBHOOK_SECRET.encode(),
+                body,
+                hashlib.sha256
+            ).hexdigest()
         
         logger.info(f"Calculated signature: {signature}")
         logger.info(f"Comparing with received signature: {sellsy_signature}")
