@@ -11,6 +11,16 @@ class AirtableAPI:
         """Initialisation de la connexion à Airtable"""
         self.table = Table(AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME)
 
+      # Dictionnaire de traduction des statuts de facture
+        self.status_translations = {
+            "draft": "Brouillon",
+            "due": "A régler",
+            "payinprogress": "Paiement partiel",
+            "paid": "Payée",
+            "late": "Retard",
+            "cancelled": "Annulée"
+        }
+
     def format_invoice_for_airtable(self, invoice):
         """Convertit une facture Sellsy au format Airtable"""
         # Vérifications de sécurité pour éviter les erreurs si des champs sont manquants
