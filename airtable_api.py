@@ -10,8 +10,8 @@ class AirtableAPI:
     def __init__(self):
         """Initialisation de la connexion à Airtable"""
         self.table = Table(AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME)
-
-      # Dictionnaire de traduction des statuts de facture
+        
+        # Dictionnaire de traduction des statuts de facture
         self.status_translations = {
             "draft": "Brouillon",
             "due": "A régler",
@@ -116,6 +116,9 @@ class AirtableAPI:
         # Récupération du statut
         status = invoice.get("status", "")
         
+        # Traduire le statut en français
+        status_fr = self.status_translations.get(status, status)
+        
         # Récupération du lien PDF direct de Sellsy
         pdf_link = invoice.get("pdf_link", "")
         
@@ -139,7 +142,7 @@ class AirtableAPI:
             "ID_Client_Sellsy": client_id,  # Ajout de l'ID client Sellsy
             "Montant_HT": montant_ht,  # Maintenant c'est un float
             "Montant_TTC": montant_ttc,  # Maintenant c'est un float
-            "Statut": status,
+            "Statut": status_fr,  # Statut traduit en français
             "URL": f"https://go.sellsy.com/document/{invoice.get('id', '')}"
         }
         
