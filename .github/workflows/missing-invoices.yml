@@ -55,4 +55,4 @@ jobs:
         python main.py sync-missing --limit ${{ github.event.inputs.limit || '1000' }}
         
     - name: Log completion
-      run: echo "Synchronisation des factures manquantes terminé
+      run: echo "Synchronisation des factures manquantes terminée"
