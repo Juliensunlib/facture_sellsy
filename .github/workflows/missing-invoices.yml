@@ -10,7 +10,7 @@ on:
       limit:
         description: 'Nombre maximum de factures à vérifier'
         required: false
-        default: '500'
+        default: '1000'
         type: string
 
 jobs:
