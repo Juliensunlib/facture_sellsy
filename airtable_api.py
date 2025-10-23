@@ -241,6 +241,16 @@ class AirtableAPI:
 
             if existing_record:
                 record_id = existing_record["id"]
+                existing_fields = existing_record.get("fields", {})
+                existing_id = existing_fields.get("ID_Facture", "")
+
+                # Si l'enregistrement existant a déjà un ID valide, ne pas l'écraser
+                if existing_id and existing_id != sellsy_id:
+                    print(f"⚠️ Conflit d'ID détecté : Airtable a '{existing_id}', Sellsy renvoie '{sellsy_id}'")
+                    print(f"   Conservation de l'ID Airtable existant pour éviter d'écraser une correction manuelle")
+                    # Ne pas mettre à jour l'ID
+                    invoice_data_copy.pop("ID_Facture", None)
+
                 print(f"🔁 Facture {sellsy_id} déjà présente, mise à jour en cours...")
                 self.table.update(record_id, invoice_data_copy)
                 print(f"✅ Facture {sellsy_id} mise à jour avec succès.")
