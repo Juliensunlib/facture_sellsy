@@ -51,7 +51,13 @@ class AirtableAPI:
         # Récupérer l'ID client de Sellsy avec gestion des cas où les champs sont manquants
         client_id = None
         client_name = ""
-        
+
+        # Debug : afficher la structure du champ "related"
+        if "related" in invoice:
+            related_data = invoice.get("related", {})
+            print(f"DEBUG - Structure 'related': type={type(related_data)}, valeur={related_data}")
+            logger.debug(f"Champ 'related' de la facture: {related_data}")
+
         # Vérifier les différentes structures possibles de l'API Sellsy pour les informations client
         if "relation" in invoice:
             if "id" in invoice["relation"]:
@@ -59,14 +65,32 @@ class AirtableAPI:
             if "name" in invoice["relation"]:
                 client_name = invoice["relation"]["name"]
         elif "related" in invoice:
-            for related in invoice.get("related", []):
-                if related.get("type") == "individual" or related.get("type") == "corporation":
-                    client_id = str(related.get("id", ""))
-                    client_name = related.get("name", "")
-                    break
+            related_value = invoice.get("related", [])
+
+            # Le champ "related" peut être un dict ou une liste
+            if isinstance(related_value, dict):
+                # Si c'est un dictionnaire, extraire directement
+                if "id" in related_value:
+                    client_id = str(related_value.get("id", ""))
+                    client_name = related_value.get("name", "")
+                    print(f"✅ Client trouvé (dict): ID={client_id}, Nom={client_name}")
+            elif isinstance(related_value, list):
+                # Si c'est une liste, chercher le bon type
+                for related in related_value:
+                    if related.get("type") == "individual" or related.get("type") == "corporation":
+                        client_id = str(related.get("id", ""))
+                        client_name = related.get("name", "")
+                        print(f"✅ Client trouvé (list): ID={client_id}, Nom={client_name}")
+                        break
+
             # Si le nom n'est pas disponible directement
             if not client_name:
                 client_name = invoice.get("company_name", invoice.get("client_name", "Client #" + str(client_id) if client_id else ""))
+
+        # Log final pour vérifier ce qui a été extrait
+        if not client_id:
+            print(f"⚠️ Aucun ID client trouvé pour la facture {invoice.get('id', 'inconnue')}")
+            logger.warning(f"ID client manquant pour facture {invoice.get('id', 'inconnue')}")
         
         # Gestion de la date - vérifier plusieurs chemins possibles dans la structure JSON
         created_date = ""
