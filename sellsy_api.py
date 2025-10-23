@@ -147,15 +147,20 @@ class SellsyAPI:
                         # Traitement des données en cas de succès
                         response_data = response.json()
                         page_invoices = response_data.get("data", [])
-                        
+
                         # Si la page est vide, on a fini
                         if not page_invoices:
                             print("🏁 Page vide reçue, fin de la pagination")
                             return all_invoices[:limit]
-                            
+
+                        # Vérifier que chaque facture a un ID
+                        for invoice in page_invoices:
+                            if "id" not in invoice or not invoice["id"]:
+                                print(f"⚠️ Facture sans ID détectée dans la liste - Clés: {list(invoice.keys())}")
+
                         # Nombre de factures restantes à récupérer
                         remaining = limit - len(all_invoices)
-                        
+
                         # Ajouter seulement les factures nécessaires
                         invoices_to_add = page_invoices[:remaining]
                         all_invoices.extend(invoices_to_add)
@@ -262,10 +267,17 @@ class SellsyAPI:
                     # Vérifier le format de la réponse
                     if "data" in data:
                         print(f"✅ Détails de la facture {invoice_id} récupérés (format avec data)")
-                        return data.get("data", {})
+                        invoice_data = data.get("data", {})
                     else:
                         print(f"✅ Détails de la facture {invoice_id} récupérés (format direct)")
-                        return data
+                        invoice_data = data
+
+                    # S'assurer que l'ID est présent dans les détails
+                    if "id" not in invoice_data:
+                        print(f"⚠️ L'ID est manquant dans les détails, ajout de l'ID depuis la requête")
+                        invoice_data["id"] = invoice_id
+
+                    return invoice_data
                 
                 elif status_code == 401:
                     # Renouveler le token et réessayer

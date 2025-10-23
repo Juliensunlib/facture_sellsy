@@ -5,6 +5,18 @@ import json
 import base64
 import os
 import requests
+import logging
+
+# Configuration du logging pour le debug
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('airtable_sync_debug.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger("airtable_api")
 
 class AirtableAPI:
     def __init__(self):
@@ -30,7 +42,12 @@ class AirtableAPI:
             
         # Affichage des clés principales pour débogage
         print(f"Structure de la facture - Clés principales: {list(invoice.keys())}")
-        
+
+        # Debug: vérifier immédiatement l'ID
+        raw_id = invoice.get("id")
+        print(f"DEBUG - ID brut reçu: '{raw_id}' (type: {type(raw_id)})")
+        logger.debug(f"Format invoice - ID reçu: '{raw_id}', type: {type(raw_id)}, keys: {list(invoice.keys())}")
+
         # Récupérer l'ID client de Sellsy avec gestion des cas où les champs sont manquants
         client_id = None
         client_name = ""
@@ -136,7 +153,10 @@ class AirtableAPI:
         # Vérifier que l'ID de facture existe
         invoice_id = invoice.get("id")
         if not invoice_id:
-            print(f"❌ ID de facture manquant dans les données Sellsy. Données: {list(invoice.keys())}")
+            error_msg = f"ID de facture manquant dans les données Sellsy. Clés disponibles: {list(invoice.keys())}"
+            print(f"❌ {error_msg}")
+            logger.error(f"{error_msg}")
+            logger.error(f"Données complètes de la facture (100 premiers caractères): {str(invoice)[:100]}")
             return None
 
         # Créer un dictionnaire avec des valeurs par défaut pour éviter les erreurs
