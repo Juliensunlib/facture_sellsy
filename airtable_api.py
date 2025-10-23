@@ -76,11 +76,13 @@ class AirtableAPI:
                     print(f"✅ Client trouvé (dict): ID={client_id}, Nom={client_name}")
             elif isinstance(related_value, list):
                 # Si c'est une liste, chercher le bon type
+                # Types possibles: individual, corporation, company
                 for related in related_value:
-                    if related.get("type") == "individual" or related.get("type") == "corporation":
+                    client_type = related.get("type", "")
+                    if client_type in ["individual", "corporation", "company"]:
                         client_id = str(related.get("id", ""))
                         client_name = related.get("name", "")
-                        print(f"✅ Client trouvé (list): ID={client_id}, Nom={client_name}")
+                        print(f"✅ Client trouvé (list, type={client_type}): ID={client_id}, Nom={client_name}")
                         break
 
             # Si le nom n'est pas disponible directement
