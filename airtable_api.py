@@ -133,9 +133,15 @@ class AirtableAPI:
             montant_ht = 0.0
             montant_ttc = 0.0
         
+        # Vérifier que l'ID de facture existe
+        invoice_id = invoice.get("id")
+        if not invoice_id:
+            print(f"❌ ID de facture manquant dans les données Sellsy. Données: {list(invoice.keys())}")
+            return None
+
         # Créer un dictionnaire avec des valeurs par défaut pour éviter les erreurs
         result = {
-            "ID_Facture": str(invoice.get("id", "")),  # Conversion explicite en str
+            "ID_Facture": str(invoice_id),  # Conversion explicite en str
             "Numéro": reference,
             "Date": created_date,  # Date formatée correctement
             "Client": client_name,
@@ -143,7 +149,7 @@ class AirtableAPI:
             "Montant_HT": montant_ht,  # Maintenant c'est un float
             "Montant_TTC": montant_ttc,  # Maintenant c'est un float
             "Statut": status_fr,  # Statut traduit en français
-            "URL": f"https://go.sellsy.com/document/{invoice.get('id', '')}"
+            "URL": f"https://go.sellsy.com/document/{invoice_id}"
         }
         
         # Ajouter le lien direct vers le PDF si disponible

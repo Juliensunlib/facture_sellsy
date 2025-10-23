@@ -74,6 +74,22 @@ En local:
 python main.py webhook --port 8000
 ```
 
+### Outils de diagnostic et nettoyage
+
+#### Analyser la structure des données Sellsy
+Pour déboguer et voir la structure exacte des factures récupérées depuis Sellsy:
+```
+python debug_sellsy_data.py
+```
+
+#### Nettoyer les factures avec ID vide
+Pour identifier et supprimer les factures avec ID Sellsy vide dans Airtable:
+```
+python cleanup_empty_ids.py
+```
+
+**IMPORTANT**: Ce script supprimera définitivement les enregistrements dans Airtable. Une confirmation sera demandée avant suppression.
+
 ## Configuration du webhook dans Sellsy
 
 1. Allez dans Paramètres > API et Webhooks
